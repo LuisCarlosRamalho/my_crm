@@ -1,19 +1,46 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Building2, Kanban } from 'lucide-react';
+import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import Companies from './components/Companies';
 import Pipeline from './components/Pipeline';
+import Leads from './components/Leads';
+import Login from './components/Login';
+import { getCurrentUser, setCurrentUser, getUsers } from './store';
+import type { User } from './store';
+import { LayoutDashboard, Building2, Kanban, Users, Settings as SettingsIcon } from 'lucide-react';
 import './index.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'companies' | 'pipeline'>('dashboard');
+  const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'companies' | 'pipeline' | 'leads' | 'settings'>('dashboard');
+  const [editOppId, setEditOppId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setUser(getCurrentUser());
+  }, []);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setUser(null);
+  };
+
+  const handleProfileUpdate = () => {
+    setUser(getCurrentUser());
+  };
+
+  if (!user) {
+    return <Login onLoginSuccess={() => setUser(getCurrentUser())} />;
+  }
+
+  const masterUser = getUsers().find(u => u.role === 'master');
+  const crmName = masterUser?.companyName || 'CRM B2B';
 
   return (
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-header">
           <Building2 size={24} />
-          <span>CRM B2B</span>
+          <span>{crmName}</span>
         </div>
         <nav className="sidebar-nav">
           <a
@@ -40,13 +67,43 @@ function App() {
             <Kanban size={20} />
             Pipeline
           </a>
+          <a
+            href="#"
+            className={`nav-item ${currentView === 'leads' ? 'active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setCurrentView('leads'); }}
+          >
+            <Users size={20} />
+            Leads
+          </a>
+          <a
+            href="#"
+            className={`nav-item ${currentView === 'settings' ? 'active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setCurrentView('settings'); }}
+          >
+            <SettingsIcon size={20} />
+            Configurações
+          </a>
         </nav>
+        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            Olá, <strong>{user.name.split(' ')[0]}</strong>
+          </div>
+          <button 
+            onClick={handleLogout}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', width: '100%', borderRadius: '0.5rem', color: 'var(--danger-color)', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5' }}
+          >
+            <Users size={16} style={{ transform: 'rotate(180deg)' }} /> 
+            Sair do Sistema
+          </button>
+        </div>
       </aside>
 
       <main className="main-content">
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'companies' && <Companies />}
-        {currentView === 'pipeline' && <Pipeline />}
+        {currentView === 'pipeline' && <Pipeline initialEditOppId={editOppId} onClearEdit={() => setEditOppId(null)} />}
+        {currentView === 'leads' && <Leads onNavigateToPipeline={(oppId) => { setEditOppId(oppId); setCurrentView('pipeline'); }} />}
+        {currentView === 'settings' && <Settings onProfileUpdate={handleProfileUpdate} />}
       </main>
     </div>
   );

@@ -1,8 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
+// Force Vite HMR reload
 
 export type ContactProfile = 'Sócio' | 'Influenciador' | 'Contato Operacional';
-export type ActivityType = 'WhatsApp' | 'E-mail' | 'Ligação' | 'Reunião Presencial';
+export type ActivityType = 'Telefone' | 'WhatsApp' | 'E-mail' | 'Visita' | 'Reunião' | 'Vídeochamada' | string;
 export type OpportunityStatus = string;
+
+export interface StageConfig {
+  name: string;
+  colorTheme: number;
+}
 
 export interface Contact {
   id: string;
@@ -18,6 +24,7 @@ export interface Activity {
   notes: string;
   date: string;
   opportunityId?: string;
+  author?: string;
 }
 
 export interface Company {
@@ -26,6 +33,12 @@ export interface Company {
   corporateName: string;
   cnpj: string;
   segment: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  neighborhood?: string;
+  zipCode?: string;
+  phone?: string;
   contacts: Contact[];
   activities: Activity[];
 }
@@ -77,14 +90,86 @@ export const saveOpportunities = (opps: Opportunity[]) => {
 };
 
 const STAGES_KEY = 'crm_stages';
+const STAGES_CONFIG_KEY = 'crm_stages_config';
+
 const defaultStages = ['Prospecção', 'Diagnóstico', 'Proposta', 'Negociação', 'Fechamento'];
 
+export const getStageConfigs = (): StageConfig[] => {
+  const configData = localStorage.getItem(STAGES_CONFIG_KEY);
+  if (configData) {
+    return JSON.parse(configData);
+  }
+  
+  // Fallback to old stages
+  const oldData = localStorage.getItem(STAGES_KEY);
+  const stages = oldData ? JSON.parse(oldData) : defaultStages;
+  
+  return stages.map((name: string, index: number) => ({
+    name,
+    colorTheme: index % 7 // Assuming 7 colors available
+  }));
+};
+
+export const saveStageConfigs = (configs: StageConfig[]) => {
+  localStorage.setItem(STAGES_CONFIG_KEY, JSON.stringify(configs));
+  // Keep old key in sync just in case
+  localStorage.setItem(STAGES_KEY, JSON.stringify(configs.map(c => c.name)));
+};
+
 export const getStages = (): string[] => {
-  const data = localStorage.getItem(STAGES_KEY);
-  return data ? JSON.parse(data) : defaultStages;
+  return getStageConfigs().map(c => c.name);
 };
 
 export const saveStages = (stages: string[]) => {
-  localStorage.setItem(STAGES_KEY, JSON.stringify(stages));
+  const currentConfigs = getStageConfigs();
+  const newConfigs = stages.map((name, index) => {
+    const existing = currentConfigs.find(c => c.name === name);
+    return existing || { name, colorTheme: index % 7 };
+  });
+  saveStageConfigs(newConfigs);
+};
+
+// Auth and Users
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  role: 'master' | 'user';
+  phone?: string;
+  roleTitle?: string;
+  companyName?: string;
+}
+
+export const getUsers = (): User[] => {
+  const users = localStorage.getItem('crm_users');
+  if (users) return JSON.parse(users);
+  
+  const masterUser: User = {
+    id: 'master-user-1',
+    name: 'Luis Carlos',
+    email: 'luiscarlos@crm.com.br',
+    passwordHash: btoa('Stratovarius@088'),
+    role: 'master'
+  };
+  localStorage.setItem('crm_users', JSON.stringify([masterUser]));
+  return [masterUser];
+};
+
+export const saveUsers = (users: User[]) => {
+  localStorage.setItem('crm_users', JSON.stringify(users));
+};
+
+export const getCurrentUser = (): User | null => {
+  const user = localStorage.getItem('crm_current_user');
+  return user ? JSON.parse(user) : null;
+};
+
+export const setCurrentUser = (user: User | null) => {
+  if (user) {
+    localStorage.setItem('crm_current_user', JSON.stringify(user));
+  } else {
+    localStorage.removeItem('crm_current_user');
+  }
 };
 

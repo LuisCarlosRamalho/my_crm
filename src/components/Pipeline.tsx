@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { Plus, Calendar, User, DollarSign, MessageCircle } from 'lucide-react';
-import { getOpportunities, saveOpportunities, getCompanies, getStages, saveStages } from '../store';
-import type { Opportunity, OpportunityStatus, Company } from '../store';
+import { getOpportunities, saveOpportunities, getCompanies, getStageConfigs, saveStageConfigs, getCurrentUser } from '../store';
+import type { Opportunity, OpportunityStatus, Company, StageConfig } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
 
@@ -17,24 +17,58 @@ const COLUMN_COLORS = [
   { bg: '#F0F9FF', border: '#0EA5E9', text: '#0369A1' },
 ];
 
-const Pipeline: React.FC = () => {
-  const [columns, setColumns] = useState<string[]>([]);
+interface PipelineProps {
+  initialEditOppId?: string | null;
+  onClearEdit?: () => void;
+}
+
+const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) => {
+  const [columns, setColumns] = useState<StageConfig[]>([]);
   const [opportunities, setLocalOpportunities] = useState<Opportunity[]>([]);
   const [companies, setLocalCompanies] = useState<Company[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showStageModal, setShowStageModal] = useState(false);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageColor, setNewStageColor] = useState(0);
   const [formData, setFormData] = useState<Partial<Opportunity>>({});
   const [companySearch, setCompanySearch] = useState('');
 
+  const currentUser = getCurrentUser();
+  const isMaster = currentUser?.role === 'master';
+
   useEffect(() => {
-    setColumns(getStages());
-    setLocalOpportunities(getOpportunities());
-    setLocalCompanies(getCompanies());
+    setColumns(getStageConfigs());
+    const opps = getOpportunities();
+    setLocalOpportunities(opps);
+    const comps = getCompanies();
+    setLocalCompanies(comps);
+
+    if (initialEditOppId) {
+      const oppToEdit = opps.find(o => o.id === initialEditOppId);
+      if (oppToEdit) {
+        setFormData(oppToEdit);
+        setCompanySearch(comps.find(c => c.id === oppToEdit.companyId)?.fantasyName || '');
+        setShowModal(true);
+      }
+      if (onClearEdit) onClearEdit();
+    }
   }, []);
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
 
-    const { source, destination } = result;
+    const { source, destination, type } = result;
+
+    if (type === 'COLUMN') {
+      if (source.index === destination.index) return;
+      const newColumns = Array.from(columns);
+      const [removed] = newColumns.splice(source.index, 1);
+      newColumns.splice(destination.index, 0, removed);
+      setColumns(newColumns);
+      saveStageConfigs(newColumns);
+      return;
+    }
+
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     const itemCopied = opportunities.find(o => o.id === result.draggableId);
@@ -44,7 +78,10 @@ const Pipeline: React.FC = () => {
     const destStatus = destination.droppableId as OpportunityStatus;
     const sourceStatus = source.droppableId as OpportunityStatus;
     
-    if (columns.indexOf(destStatus) > columns.indexOf(sourceStatus)) {
+    const destIndex = columns.findIndex(c => c.name === destStatus);
+    const sourceIndex = columns.findIndex(c => c.name === sourceStatus);
+    
+    if (destIndex > sourceIndex) {
       const company = companies.find(c => c.id === itemCopied.companyId);
       const hasValidContact = company?.contacts.some(c => c.profile === 'Sócio' || c.profile === 'Influenciador');
       
@@ -63,7 +100,7 @@ const Pipeline: React.FC = () => {
   };
 
   const openAdd = () => {
-    setFormData({ status: columns[0] || 'Prospecção', expectedClosingDate: new Date().toISOString().split('T')[0] });
+    setFormData({ status: columns.length > 0 ? columns[0].name : 'Prospecção', expectedClosingDate: new Date().toISOString().split('T')[0] });
     setCompanySearch('');
     setShowModal(true);
   };
@@ -97,15 +134,28 @@ const Pipeline: React.FC = () => {
     setShowModal(false);
   };
 
+  const handleDelete = () => {
+    if (!formData.id) return;
+    if (window.confirm('Tem certeza que deseja excluir esta oportunidade permanentemente?')) {
+      const updated = opportunities.filter(o => o.id !== formData.id);
+      setLocalOpportunities(updated);
+      saveOpportunities(updated);
+      setShowModal(false);
+    }
+  };
+
   const getCompany = (id: string) => companies.find(c => c.id === id);
 
-  const handleAddColumn = () => {
-    const name = window.prompt('Nome da nova etapa:');
-    if (name && name.trim()) {
-      const newColumns = [...columns, name.trim()];
-      setColumns(newColumns);
-      saveStages(newColumns);
+  const handleSaveStage = () => {
+    if (!newStageName.trim()) {
+      alert('Por favor, informe o nome da etapa.');
+      return;
     }
+    const newConfig: StageConfig = { name: newStageName.trim(), colorTheme: newStageColor };
+    const newColumns = [...columns, newConfig];
+    setColumns(newColumns);
+    saveStageConfigs(newColumns);
+    setShowStageModal(false);
   };
 
   return (
@@ -120,77 +170,104 @@ const Pipeline: React.FC = () => {
       <div className="page-body">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="kanban-board">
-            {columns.map((column, colIndex) => {
-              const colorTheme = COLUMN_COLORS[colIndex % COLUMN_COLORS.length];
-              return (
-              <div className="kanban-column" key={column} style={{ backgroundColor: colorTheme.bg, borderTop: `3px solid ${colorTheme.border}` }}>
-                <div className="kanban-column-header">
-                  <div className="kanban-column-title" style={{ color: colorTheme.text }}>
-                    {column}
-                    <span className="badge">{opportunities.filter(o => !o.isLost && o.status === column).length}</span>
-                  </div>
-                </div>
-                
-                <Droppable droppableId={column}>
-                  {(provided, snapshot) => (
-                    <div
-                      className="kanban-cards"
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      style={{ backgroundColor: snapshot.isDraggingOver ? 'rgba(79, 70, 229, 0.05)' : '' }}
-                    >
-                      {opportunities.filter(o => !o.isLost && o.status === column).map((opp, index) => (
-                        <Draggable key={opp.id} draggableId={opp.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              onClick={() => { 
-                                setFormData(opp); 
-                                setCompanySearch(getCompany(opp.companyId)?.fantasyName || '');
-                                setShowModal(true); 
-                              }}
-                            >
-                              <div className="card-title">{opp.name}</div>
-                              <div className="card-company">
-                                {getCompany(opp.companyId)?.fantasyName || 'Empresa Desconhecida'}
-                              </div>
-                              {opp.nextFollowUp && (
-                                <div className="card-followup">
-                                  <Calendar size={12} /> Próx: {format(new Date(opp.nextFollowUp), 'dd/MM/yyyy')}
-                                </div>
-                              )}
-                              {opp.lastFollowUpNotes && (
-                                <div className="card-last-notes">
-                                  <strong>Último:</strong> {opp.lastFollowUpNotes.length > 60 ? opp.lastFollowUpNotes.substring(0, 60) + '...' : opp.lastFollowUpNotes}
-                                </div>
-                              )}
-                              <div className="card-footer">
-                                <div className="flex items-center gap-1 text-muted">
-                                  <User size={14} /> {opp.responsible}
-                                </div>
-                                <div className="card-value">
-                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opp.estimatedValue)}
-                                </div>
+            <Droppable droppableId="board" direction="horizontal" type="COLUMN">
+              {(provided) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  style={{ display: 'flex', gap: '1.5rem', height: '100%' }}
+                >
+                  {columns.map((columnConfig, index) => {
+                    const column = columnConfig.name;
+                    const colorTheme = COLUMN_COLORS[columnConfig.colorTheme % COLUMN_COLORS.length];
+                    return (
+                      <Draggable key={column} draggableId={column} index={index}>
+                        {(provided, snapshot) => (
+                          <div 
+                            className="kanban-column" 
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            style={{ 
+                              backgroundColor: colorTheme.bg, 
+                              borderTop: `3px solid ${colorTheme.border}`,
+                              ...provided.draggableProps.style
+                            }}
+                          >
+                            <div className="kanban-column-header" {...provided.dragHandleProps} style={{ cursor: 'grab' }}>
+                              <div className="kanban-column-title" style={{ color: colorTheme.text }}>
+                                {column}
+                                <span className="badge">{opportunities.filter(o => !o.isLost && o.status === column).length}</span>
                               </div>
                             </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
+                            
+                            <Droppable droppableId={column} type="CARD">
+                              {(provided, snapshot) => (
+                                <div
+                                  className="kanban-cards"
+                                  ref={provided.innerRef}
+                                  {...provided.droppableProps}
+                                  style={{ backgroundColor: snapshot.isDraggingOver ? 'rgba(79, 70, 229, 0.05)' : '' }}
+                                >
+                                  {opportunities.filter(o => !o.isLost && o.status === column).map((opp, index) => (
+                                    <Draggable key={opp.id} draggableId={opp.id} index={index} isDragDisabled={!isMaster}>
+                                      {(provided, snapshot) => (
+                                        <div
+                                          className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                                          ref={provided.innerRef}
+                                          {...provided.draggableProps}
+                                          {...provided.dragHandleProps}
+                                          onClick={() => { 
+                                            setFormData(opp); 
+                                            setCompanySearch(getCompany(opp.companyId)?.fantasyName || '');
+                                            setShowModal(true); 
+                                          }}
+                                        >
+                                          <div className="card-title">{opp.name}</div>
+                                          <div className="card-company">
+                                            {getCompany(opp.companyId)?.fantasyName || 'Empresa Desconhecida'}
+                                          </div>
+                                          {opp.nextFollowUp && (
+                                            <div className="card-followup">
+                                              <Calendar size={12} /> Próx: {format(new Date(opp.nextFollowUp), 'dd/MM/yyyy')}
+                                            </div>
+                                          )}
+                                          {opp.lastFollowUpNotes && (
+                                            <div className="card-last-notes">
+                                              <strong>Último:</strong> {opp.lastFollowUpNotes.length > 60 ? opp.lastFollowUpNotes.substring(0, 60) + '...' : opp.lastFollowUpNotes}
+                                            </div>
+                                          )}
+                                          <div className="card-footer">
+                                            <div className="flex items-center gap-1 text-muted">
+                                              <User size={14} /> {opp.responsible}
+                                            </div>
+                                            <div className="card-value">
+                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opp.estimatedValue)}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </Draggable>
+                                  ))}
+                                  {provided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+            {isMaster && (
+              <div className="kanban-column" style={{ background: 'transparent', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => { setNewStageName(''); setNewStageColor(0); setShowStageModal(true); }}>
+                <div className="flex items-center gap-2 text-muted font-medium p-4">
+                  <Plus size={20} /> Nova Etapa
+                </div>
               </div>
-              );
-            })}
-            <div className="kanban-column" style={{ background: 'transparent', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={handleAddColumn}>
-              <div className="flex items-center gap-2 text-muted font-medium p-4">
-                <Plus size={20} /> Nova Etapa
-              </div>
-            </div>
+            )}
           </div>
         </DragDropContext>
       </div>
@@ -266,10 +343,10 @@ const Pipeline: React.FC = () => {
                 <div className="form-group flex-1">
                   <label className="form-label">Status</label>
                   <select 
-                    value={formData.status || columns[0]} 
+                    value={formData.status || (columns.length > 0 ? columns[0].name : '')} 
                     onChange={e => setFormData({...formData, status: e.target.value as OpportunityStatus})}
                   >
-                    {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    {columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -298,15 +375,75 @@ const Pipeline: React.FC = () => {
                   checked={formData.isLost || false} 
                   onChange={e => setFormData({...formData, isLost: e.target.checked})} 
                   style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
+                  disabled={!!formData.id && !isMaster}
                 />
                 <label htmlFor="isLost" className="form-label mb-0" style={{ color: '#B91C1C', cursor: 'pointer', margin: 0, fontWeight: 600 }}>
                   Marcar Oportunidade como Perdida
                 </label>
               </div>
+              {!!formData.id && !isMaster && <p className="text-xs text-muted italic mt-2">Apenas usuários Master podem editar os dados da oportunidade.</p>}
+            </div>
+            <div className="modal-footer" style={{ justifyContent: formData.id ? 'space-between' : 'flex-end' }}>
+              {formData.id && isMaster && (
+                <button className="btn btn-danger" onClick={handleDelete}>
+                  Excluir
+                </button>
+              )}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                {(!formData.id || isMaster) && <button className="btn btn-primary" onClick={handleSave}>Salvar Oportunidade</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showStageModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Nova Etapa</h2>
+              <button onClick={() => setShowStageModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Nome da Etapa</label>
+                <input 
+                  value={newStageName} 
+                  onChange={e => setNewStageName(e.target.value)} 
+                  placeholder="Ex: Qualificação"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Cor da Etapa</label>
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {COLUMN_COLORS.map((color, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setNewStageColor(idx)}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: color.bg,
+                        border: `2px solid ${newStageColor === idx ? color.border : 'transparent'}`,
+                        boxShadow: newStageColor === idx ? '0 0 0 2px var(--surface-color), 0 0 0 4px var(--primary-color)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0
+                      }}
+                      title={`Cor ${idx + 1}`}
+                    >
+                      <div style={{ width: '60%', height: '60%', borderRadius: '50%', backgroundColor: color.border }}></div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={handleSave}>Salvar Oportunidade</button>
+              <button className="btn btn-secondary" onClick={() => setShowStageModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleSaveStage}>Salvar</button>
             </div>
           </div>
         </div>

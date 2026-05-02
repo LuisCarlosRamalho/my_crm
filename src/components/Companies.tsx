@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, UserPlus, Phone, Mail, Building2, Eye } from 'lucide-react';
-import { getCompanies, saveCompanies } from '../store';
+import { Plus, Edit2, UserPlus, Phone, Mail, Building2, Eye, Trash2 } from 'lucide-react';
+import { getCompanies, saveCompanies, getCurrentUser } from '../store';
 import type { Company, Contact, ContactProfile } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,6 +11,7 @@ const Companies: React.FC = () => {
   
   const [formData, setFormData] = useState<Partial<Company>>({});
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const currentUser = getCurrentUser();
 
   useEffect(() => {
     setLocalCompanies(getCompanies());
@@ -28,6 +29,12 @@ const Companies: React.FC = () => {
       corporateName: formData.corporateName || '',
       cnpj: formData.cnpj || '',
       segment: formData.segment || '',
+      website: formData.website || '',
+      address: formData.address || '',
+      city: formData.city || '',
+      neighborhood: formData.neighborhood || '',
+      zipCode: formData.zipCode || '',
+      phone: formData.phone || '',
       contacts: contacts,
       activities: formData.activities || []
     };
@@ -66,6 +73,14 @@ const Companies: React.FC = () => {
     setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
+  const handleDelete = (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir permanentemente esta empresa do banco de dados?')) {
+      const updated = companies.filter(c => c.id !== id);
+      setLocalCompanies(updated);
+      saveCompanies(updated);
+    }
+  };
+
   return (
     <>
       <header className="page-header">
@@ -92,7 +107,14 @@ const Companies: React.FC = () => {
               <div className="text-muted">{c.cnpj}</div>
               <div>{c.segment}</div>
               <div className="flex gap-2">
-                <button className="text-muted" onClick={() => openEdit(c)}><Edit2 size={16} /></button>
+                {currentUser?.role === 'master' ? (
+                  <>
+                    <button className="text-muted hover:text-primary transition-colors" title="Editar" onClick={() => openEdit(c)}><Edit2 size={16} /></button>
+                    <button className="text-danger hover:opacity-80 transition-opacity" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={16} /></button>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted italic">Apenas Master</span>
+                )}
               </div>
             </div>
           ))}
@@ -144,10 +166,66 @@ const Companies: React.FC = () => {
                   />
                 </div>
               </div>
+              <div className="flex gap-4">
+                <div className="form-group flex-[2]">
+                  <label className="form-label">Site da Empresa (Website)</label>
+                  <input 
+                    value={formData.website || ''} 
+                    onChange={e => setFormData({...formData, website: e.target.value})} 
+                    placeholder="Ex: https://www.empresa.com.br"
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label className="form-label">Telefone (Empresa)</label>
+                  <input 
+                    value={formData.phone || ''} 
+                    onChange={e => setFormData({...formData, phone: e.target.value})} 
+                    placeholder="(00) 0000-0000"
+                  />
+                </div>
+              </div>
+
+              <h3 className="font-medium mt-4 mb-2 border-b pb-1 text-muted">Localização</h3>
+              <div className="flex gap-4">
+                <div className="form-group flex-[2]">
+                  <label className="form-label">Endereço (Rua, Número, Complemento)</label>
+                  <input 
+                    value={formData.address || ''} 
+                    onChange={e => setFormData({...formData, address: e.target.value})} 
+                    placeholder="Ex: Av. Paulista, 1000 - Sala 42"
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label className="form-label">CEP</label>
+                  <input 
+                    value={formData.zipCode || ''} 
+                    onChange={e => setFormData({...formData, zipCode: e.target.value})} 
+                    placeholder="00000-000"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="form-group flex-1">
+                  <label className="form-label">Bairro</label>
+                  <input 
+                    value={formData.neighborhood || ''} 
+                    onChange={e => setFormData({...formData, neighborhood: e.target.value})} 
+                    placeholder="Ex: Bela Vista"
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label className="form-label">Cidade / UF</label>
+                  <input 
+                    value={formData.city || ''} 
+                    onChange={e => setFormData({...formData, city: e.target.value})} 
+                    placeholder="Ex: São Paulo / SP"
+                  />
+                </div>
+              </div>
 
               <div className="mt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-medium">Contatos</h3>
+                <div className="flex justify-between items-center mb-4 border-b pb-1">
+                  <h3 className="font-medium text-muted">Contatos</h3>
                   <button className="btn btn-secondary btn-sm" onClick={addContact}>
                     <UserPlus size={14} /> Adicionar Contato
                   </button>

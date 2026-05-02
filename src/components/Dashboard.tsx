@@ -61,6 +61,19 @@ const Dashboard: React.FC = () => {
     }
   ];
 
+  // Companies by Segment Data
+  const segmentMap: Record<string, number> = {};
+  companies.forEach(c => {
+    const seg = c.segment || 'Sem segmento';
+    segmentMap[seg] = (segmentMap[seg] || 0) + 1;
+  });
+  
+  const segmentData = Object.keys(segmentMap).map((seg, index) => ({
+    name: seg,
+    value: segmentMap[seg],
+    fill: COLUMN_COLORS[index % COLUMN_COLORS.length]
+  }));
+
   // Users Data
   const usersMap: Record<string, { count: number; value: number }> = {};
   opportunities.forEach(o => {
@@ -77,6 +90,20 @@ const Dashboard: React.FC = () => {
 
   // Format currency
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  const pipelineLegendPayload: any = pipelineData.map(entry => ({
+    value: entry.name,
+    type: 'square',
+    id: entry.name,
+    color: entry.fill
+  }));
+
+  const wonLostLegendPayload: any = wonLostData.map(entry => ({
+    value: entry.name,
+    type: 'square',
+    id: entry.name,
+    color: entry.fill
+  }));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -147,7 +174,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="dashboard-grid">
-          <div className="chart-card">
+          <div className="chart-card" style={{ gridColumn: 'span 12' }}>
             <h3 className="chart-header">Funil de Vendas por Etapa</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={pipelineData}>
@@ -155,7 +182,7 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(val) => `R$ ${val/1000}k`} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend payload={[{ value: 'Valor (R$)', type: 'square', id: 'ID01', color: 'var(--primary-color)' }]} />
+                <Legend payload={pipelineLegendPayload} />
                 <Bar dataKey="Valor" radius={[4, 4, 0, 0]}>
                   {pipelineData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -164,8 +191,10 @@ const Dashboard: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
 
-          <div className="chart-card">
+        <div className="dashboard-grid mt-4">
+          <div className="chart-card" style={{ gridColumn: 'span 12' }}>
             <h3 className="chart-header">Oportunidades: Ganhas vs Perdidas</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={wonLostData}>
@@ -173,13 +202,38 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(val) => `R$ ${val/1000}k`} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend payload={[{ value: 'Valor (R$)', type: 'square', id: 'ID02', color: '#64748b' }]} />
+                <Legend payload={wonLostLegendPayload} />
                 <Bar dataKey="Valor" radius={[4, 4, 0, 0]}>
                   {wonLostData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Bar>
               </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="dashboard-grid mt-4">
+          <div className="chart-card" style={{ gridColumn: 'span 12' }}>
+            <h3 className="chart-header">Empresas por Categoria (Segmento)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={segmentData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {segmentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [value, 'Quantidade']} />
+                <Legend />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

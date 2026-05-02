@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User as UserIcon, Phone, Briefcase, Building2, Lock, Shield, Trash2, Edit2 } from 'lucide-react';
 import { getUsers, saveUsers, getCurrentUser, setCurrentUser } from '../store';
 import type { User } from '../store';
+import CryptoJS from 'crypto-js';
 
 interface SettingsProps {
   onProfileUpdate?: () => void;
@@ -61,7 +62,7 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     e.preventDefault();
     if (!currentUser) return;
     
-    if (btoa(currentPassword) !== currentUser.passwordHash) {
+    if (CryptoJS.SHA256(currentPassword).toString() !== currentUser.passwordHash) {
       alert('Senha atual incorreta.');
       return;
     }
@@ -74,7 +75,7 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     
     const updatedUser = {
       ...currentUser,
-      passwordHash: btoa(newPassword)
+      passwordHash: CryptoJS.SHA256(newPassword).toString()
     };
     
     updateUserInDB(updatedUser);
@@ -98,14 +99,14 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     }
   };
 
-  const handleRoleChange = (id: string, newRole: 'master' | 'basic') => {
+  const handleRoleChange = (id: string, newRole: 'master' | 'user') => {
     if (id === currentUser?.id) {
       alert('Você não pode alterar seu próprio nível de acesso aqui.');
       return;
     }
     const userToUpdate = users.find(u => u.id === id);
     if (!userToUpdate) return;
-    const updatedUser = { ...userToUpdate, role: newRole };
+    const updatedUser: User = { ...userToUpdate, role: newRole };
     updateUserInDB(updatedUser);
     showMessage(`Nível de acesso de ${updatedUser.name} atualizado para ${newRole === 'master' ? 'Master' : 'Basic'}.`);
   };
@@ -120,7 +121,7 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     
     const updatedUser = {
       ...editingUser,
-      passwordHash: btoa(adminNewPassword)
+      passwordHash: CryptoJS.SHA256(adminNewPassword).toString()
     };
     
     updateUserInDB(updatedUser);
@@ -243,11 +244,11 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
                           <span className="badge" style={{ backgroundColor: '#FEF08A', color: '#854D0E', fontSize: '0.65rem' }}>Master</span>
                         ) : (
                           <select 
-                            value={u.role || 'basic'} 
-                            onChange={(e) => handleRoleChange(u.id, e.target.value as 'master' | 'basic')}
+                            value={u.role || 'user'} 
+                            onChange={(e) => handleRoleChange(u.id, e.target.value as 'master' | 'user')}
                             style={{ fontSize: '0.65rem', padding: '0.1rem 0.5rem', borderRadius: '1rem', backgroundColor: u.role === 'master' ? '#FEF08A' : '#E2E8F0', color: u.role === 'master' ? '#854D0E' : '#475569', border: 'none', outline: 'none', cursor: 'pointer', fontWeight: 600 }}
                           >
-                            <option value="basic">Basic</option>
+                            <option value="user">Basic</option>
                             <option value="master">Master</option>
                           </select>
                         )}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  PieChart, Pie, Cell
 } from 'recharts';
 import { getOpportunities, getCompanies, getStages } from '../store';
 import type { Opportunity, Company, OpportunityStatus } from '../store';
@@ -74,36 +74,8 @@ const Dashboard: React.FC = () => {
     fill: COLUMN_COLORS[index % COLUMN_COLORS.length]
   }));
 
-  // Users Data
-  const usersMap: Record<string, { count: number; value: number }> = {};
-  opportunities.forEach(o => {
-    if (!usersMap[o.responsible]) usersMap[o.responsible] = { count: 0, value: 0 };
-    usersMap[o.responsible].count++;
-    usersMap[o.responsible].value += o.estimatedValue;
-  });
-  
-  const usersData = Object.keys(usersMap).map(u => ({
-    name: u,
-    Oportunidades: usersMap[u].count,
-    Valor: usersMap[u].value
-  }));
-
   // Format currency
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-  const pipelineLegendPayload: any = pipelineData.map(entry => ({
-    value: entry.name,
-    type: 'square',
-    id: entry.name,
-    color: entry.fill
-  }));
-
-  const wonLostLegendPayload: any = wonLostData.map(entry => ({
-    value: entry.name,
-    type: 'square',
-    id: entry.name,
-    color: entry.fill
-  }));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -112,10 +84,10 @@ const Dashboard: React.FC = () => {
         <div style={{ backgroundColor: '#fff', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)' }}>
           <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-main)' }}>{label}</p>
           <p style={{ color: data.fill || 'var(--text-main)', fontWeight: 500, fontSize: '0.9rem', marginBottom: '0.25rem' }}>
-            Valor: {formatCurrency(data.Valor)}
+            Valor: {formatCurrency(data.Valor || data.value)}
           </p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: data['Conversão Ganho %'] !== undefined ? '0.25rem' : '0' }}>
-            Quantidade: {data.Quantidade}
+            Quantidade: {data.Quantidade || data.value}
           </p>
           {data['Conversão Ganho %'] !== undefined && (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
@@ -126,6 +98,20 @@ const Dashboard: React.FC = () => {
       );
     }
     return null;
+  };
+
+  const CustomLegend = (props: any) => {
+    const { payload } = props;
+    return (
+      <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0 0 0', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+        {payload && payload.map((entry: any, index: number) => (
+          <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <div style={{ width: 12, height: 12, backgroundColor: entry.color, borderRadius: '2px' }} />
+            {entry.value}
+          </li>
+        ))}
+      </ul>
+    );
   };
 
   return (
@@ -182,7 +168,7 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(val) => `R$ ${val/1000}k`} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend payload={pipelineLegendPayload} />
+                <Legend content={<CustomLegend />} />
                 <Bar dataKey="Valor" radius={[4, 4, 0, 0]}>
                   {pipelineData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -202,7 +188,7 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(val) => `R$ ${val/1000}k`} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend payload={wonLostLegendPayload} />
+                <Legend content={<CustomLegend />} />
                 <Bar dataKey="Valor" radius={[4, 4, 0, 0]}>
                   {wonLostData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -225,14 +211,14 @@ const Dashboard: React.FC = () => {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  label={({ name, percent }) => percent ? `${name} (${(percent * 100).toFixed(0)}%)` : ''}
                 >
                   {segmentData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [value, 'Quantidade']} />
-                <Legend />
+                <Tooltip formatter={(value: any) => [value, 'Oportunidades']} />
+                <Legend content={<CustomLegend />} />
               </PieChart>
             </ResponsiveContainer>
           </div>

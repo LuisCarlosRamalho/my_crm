@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import CryptoJS from 'crypto-js';
 // Force Vite HMR reload
 
 export type ContactProfile = 'Sócio' | 'Influenciador' | 'Contato Operacional';
@@ -63,6 +64,30 @@ export interface Opportunity {
   isLost?: boolean;
 }
 
+// Encryption configuration
+const SECRET_KEY = 'crm_b2b_secret_key_2026'; // Em uma aplicação real, viria de variáveis de ambiente
+
+const encryptData = (data: any) => {
+  return CryptoJS.AES.encrypt(JSON.stringify(data), SECRET_KEY).toString();
+};
+
+const decryptData = (ciphertext: string | null) => {
+  if (!ciphertext) return null;
+  try {
+    const bytes = CryptoJS.AES.decrypt(ciphertext, SECRET_KEY);
+    const decryptedData = JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+    return decryptedData;
+  } catch (error) {
+    console.error("Erro ao descriptografar os dados:", error);
+    // Tenta fazer o parse diretamente para não quebrar dados antigos que não estavam criptografados
+    try {
+      return JSON.parse(ciphertext);
+    } catch {
+      return null;
+    }
+  }
+};
+
 // Initial Data
 const initialCompanies: Company[] = [];
 const initialOpportunities: Opportunity[] = [];
@@ -73,20 +98,20 @@ const OPPS_KEY = 'crm_opportunities';
 
 export const getCompanies = (): Company[] => {
   const data = localStorage.getItem(COMPANIES_KEY);
-  return data ? JSON.parse(data) : initialCompanies;
+  return decryptData(data) || initialCompanies;
 };
 
 export const saveCompanies = (companies: Company[]) => {
-  localStorage.setItem(COMPANIES_KEY, JSON.stringify(companies));
+  localStorage.setItem(COMPANIES_KEY, encryptData(companies));
 };
 
 export const getOpportunities = (): Opportunity[] => {
   const data = localStorage.getItem(OPPS_KEY);
-  return data ? JSON.parse(data) : initialOpportunities;
+  return decryptData(data) || initialOpportunities;
 };
 
 export const saveOpportunities = (opps: Opportunity[]) => {
-  localStorage.setItem(OPPS_KEY, JSON.stringify(opps));
+  localStorage.setItem(OPPS_KEY, encryptData(opps));
 };
 
 const STAGES_KEY = 'crm_stages';
@@ -97,12 +122,12 @@ const defaultStages = ['Prospecção', 'Diagnóstico', 'Proposta', 'Negociação
 export const getStageConfigs = (): StageConfig[] => {
   const configData = localStorage.getItem(STAGES_CONFIG_KEY);
   if (configData) {
-    return JSON.parse(configData);
+    return decryptData(configData) || [];
   }
   
   // Fallback to old stages
   const oldData = localStorage.getItem(STAGES_KEY);
-  const stages = oldData ? JSON.parse(oldData) : defaultStages;
+  const stages = oldData ? (decryptData(oldData) || defaultStages) : defaultStages;
   
   return stages.map((name: string, index: number) => ({
     name,
@@ -111,9 +136,9 @@ export const getStageConfigs = (): StageConfig[] => {
 };
 
 export const saveStageConfigs = (configs: StageConfig[]) => {
-  localStorage.setItem(STAGES_CONFIG_KEY, JSON.stringify(configs));
+  localStorage.setItem(STAGES_CONFIG_KEY, encryptData(configs));
   // Keep old key in sync just in case
-  localStorage.setItem(STAGES_KEY, JSON.stringify(configs.map(c => c.name)));
+  localStorage.setItem(STAGES_KEY, encryptData(configs.map(c => c.name)));
 };
 
 export const getStages = (): string[] => {
@@ -142,32 +167,34 @@ export interface User {
 }
 
 export const getUsers = (): User[] => {
-  const users = localStorage.getItem('crm_users');
-  if (users) return JSON.parse(users);
+  const usersStr = localStorage.getItem('crm_users');
+  const users = decryptData(usersStr);
+  if (users) return users;
   
+  // Usando CryptoJS.SHA256 para o hash da senha master
   const masterUser: User = {
     id: 'master-user-1',
     name: 'Luis Carlos',
     email: 'luiscarlos@crm.com.br',
-    passwordHash: btoa('Stratovarius@088'),
+    passwordHash: CryptoJS.SHA256('Stratovarius@088').toString(),
     role: 'master'
   };
-  localStorage.setItem('crm_users', JSON.stringify([masterUser]));
+  localStorage.setItem('crm_users', encryptData([masterUser]));
   return [masterUser];
 };
 
 export const saveUsers = (users: User[]) => {
-  localStorage.setItem('crm_users', JSON.stringify(users));
+  localStorage.setItem('crm_users', encryptData(users));
 };
 
 export const getCurrentUser = (): User | null => {
-  const user = localStorage.getItem('crm_current_user');
-  return user ? JSON.parse(user) : null;
+  const userStr = localStorage.getItem('crm_current_user');
+  return decryptData(userStr);
 };
 
 export const setCurrentUser = (user: User | null) => {
   if (user) {
-    localStorage.setItem('crm_current_user', JSON.stringify(user));
+    localStorage.setItem('crm_current_user', encryptData(user));
   } else {
     localStorage.removeItem('crm_current_user');
   }

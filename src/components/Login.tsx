@@ -3,6 +3,7 @@ import { Building2, Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-rea
 import { getUsers, saveUsers, setCurrentUser } from '../store';
 import type { User } from '../store';
 import { v4 as uuidv4 } from 'uuid';
+import CryptoJS from 'crypto-js';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -41,7 +42,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     // Allow login by name (for master) or email
     const user = users.find(u => 
       (u.email.toLowerCase() === email.toLowerCase() || u.name.toLowerCase() === email.toLowerCase()) && 
-      u.passwordHash === btoa(password)
+      u.passwordHash === CryptoJS.SHA256(password).toString()
     );
 
     if (user) {
@@ -82,7 +83,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       id: uuidv4(),
       name,
       email,
-      passwordHash: btoa(password),
+      passwordHash: CryptoJS.SHA256(password).toString(),
       role: 'user'
     };
 

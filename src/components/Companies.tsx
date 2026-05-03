@@ -1,29 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, UserPlus, Phone, Mail, Building2, Eye, Trash2 } from 'lucide-react';
-import { getCompanies, saveCompanies, getCurrentUser } from '../store';
+import { Plus, Edit2, UserPlus, Building2, Trash2 } from 'lucide-react';
+import { getCompanies, saveCompany, deleteCompany, getCurrentUser } from '../store';
 import type { Company, Contact, ContactProfile } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 
 const Companies: React.FC = () => {
   const [companies, setLocalCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [viewCompany, setViewCompany] = useState<Company | null>(null);
-  
   const [formData, setFormData] = useState<Partial<Company>>({});
   const [contacts, setContacts] = useState<Contact[]>([]);
   const currentUser = getCurrentUser();
 
   useEffect(() => {
-    setLocalCompanies(getCompanies());
+    getCompanies()
+      .then(setLocalCompanies)
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.fantasyName) {
-      alert("Por favor, preencha o Nome Fantasia da empresa.");
+      alert('Por favor, preencha o Nome Fantasia da empresa.');
       return;
     }
-    
-    const newCompany: Company = {
+    setSaving(true);
+    const company: Company = {
       id: formData.id || uuidv4(),
       fantasyName: formData.fantasyName,
       corporateName: formData.corporateName || '',
@@ -35,51 +37,31 @@ const Companies: React.FC = () => {
       neighborhood: formData.neighborhood || '',
       zipCode: formData.zipCode || '',
       phone: formData.phone || '',
-      contacts: contacts,
-      activities: formData.activities || []
+      contacts,
+      activities: formData.activities || [],
     };
-
-    let updated;
-    if (formData.id) {
-      updated = companies.map(c => c.id === formData.id ? newCompany : c);
-    } else {
-      updated = [...companies, newCompany];
-    }
-
+    await saveCompany(company);
+    const updated = formData.id
+      ? companies.map(c => c.id === formData.id ? company : c)
+      : [...companies, company];
     setLocalCompanies(updated);
-    saveCompanies(updated);
     setShowModal(false);
     setFormData({});
     setContacts([]);
+    setSaving(false);
   };
 
-  const openAdd = () => {
-    setFormData({});
-    setContacts([]);
-    setShowModal(true);
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir permanentemente esta empresa?')) return;
+    await deleteCompany(id);
+    setLocalCompanies(companies.filter(c => c.id !== id));
   };
 
-  const openEdit = (c: Company) => {
-    setFormData(c);
-    setContacts(c.contacts);
-    setShowModal(true);
-  };
-
-  const addContact = () => {
-    setContacts([...contacts, { id: uuidv4(), name: '', email: '', whatsapp: '', profile: 'Contato Operacional' }]);
-  };
-
-  const updateContact = (id: string, field: keyof Contact, value: string) => {
+  const openAdd = () => { setFormData({}); setContacts([]); setShowModal(true); };
+  const openEdit = (c: Company) => { setFormData(c); setContacts(c.contacts); setShowModal(true); };
+  const addContact = () => setContacts([...contacts, { id: uuidv4(), name: '', email: '', whatsapp: '', profile: 'Contato Operacional' }]);
+  const updateContact = (id: string, field: keyof Contact, value: string) =>
     setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir permanentemente esta empresa do banco de dados?')) {
-      const updated = companies.filter(c => c.id !== id);
-      setLocalCompanies(updated);
-      saveCompanies(updated);
-    }
-  };
 
   return (
     <>
@@ -89,39 +71,47 @@ const Companies: React.FC = () => {
           <Plus size={16} /> Nova Empresa
         </button>
       </header>
-      
+
       <div className="page-body">
-        <div className="list-container">
-          <div className="list-header">
-            <div>Nome Fantasia</div>
-            <div>CNPJ</div>
-            <div>Segmento</div>
-            <div>Ações</div>
-          </div>
-          {companies.map(c => (
-            <div className="list-row" key={c.id}>
-              <div className="flex items-center gap-2">
-                <Building2 size={16} className="text-muted" />
-                <span className="font-medium">{c.fantasyName}</span>
-              </div>
-              <div className="text-muted">{c.cnpj}</div>
-              <div>{c.segment}</div>
-              <div className="flex gap-2">
-                {currentUser?.role === 'master' ? (
-                  <>
-                    <button className="text-muted hover:text-primary transition-colors" title="Editar" onClick={() => openEdit(c)}><Edit2 size={16} /></button>
-                    <button className="text-danger hover:opacity-80 transition-opacity" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={16} /></button>
-                  </>
-                ) : (
-                  <span className="text-xs text-muted italic">Apenas Master</span>
-                )}
-              </div>
+        {loading ? (
+          <div className="p-8 text-center text-muted">Carregando empresas...</div>
+        ) : (
+          <div className="list-container">
+            <div className="list-header">
+              <div>Nome Fantasia</div>
+              <div>CNPJ</div>
+              <div>Segmento</div>
+              <div>Ações</div>
             </div>
-          ))}
-          {companies.length === 0 && (
-            <div className="p-4 text-center text-muted">Nenhuma empresa cadastrada.</div>
-          )}
-        </div>
+            {companies.map(c => (
+              <div className="list-row" key={c.id}>
+                <div className="flex items-center gap-2">
+                  <Building2 size={16} className="text-muted" />
+                  <span className="font-medium">{c.fantasyName}</span>
+                </div>
+                <div className="text-muted">{c.cnpj}</div>
+                <div>{c.segment}</div>
+                <div className="flex gap-2">
+                  {currentUser?.role === 'master' ? (
+                    <>
+                      <button className="text-muted hover:text-primary transition-colors" title="Editar" onClick={() => openEdit(c)}>
+                        <Edit2 size={16} />
+                      </button>
+                      <button className="text-danger hover:opacity-80 transition-opacity" title="Excluir" onClick={() => handleDelete(c.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted italic">Apenas Master</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {companies.length === 0 && (
+              <div className="p-4 text-center text-muted">Nenhuma empresa cadastrada.</div>
+            )}
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -134,92 +124,52 @@ const Companies: React.FC = () => {
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Nome Fantasia</label>
-                <input 
-                  value={formData.fantasyName || ''} 
-                  onChange={e => setFormData({...formData, fantasyName: e.target.value})} 
-                  placeholder="Ex: Tech Solutions"
-                />
+                <input value={formData.fantasyName || ''} onChange={e => setFormData({ ...formData, fantasyName: e.target.value })} placeholder="Ex: Tech Solutions" />
               </div>
               <div className="form-group">
                 <label className="form-label">Razão Social</label>
-                <input 
-                  value={formData.corporateName || ''} 
-                  onChange={e => setFormData({...formData, corporateName: e.target.value})} 
-                  placeholder="Ex: Tech Solutions LTDA"
-                />
+                <input value={formData.corporateName || ''} onChange={e => setFormData({ ...formData, corporateName: e.target.value })} placeholder="Ex: Tech Solutions LTDA" />
               </div>
               <div className="flex gap-4">
                 <div className="form-group flex-1">
                   <label className="form-label">CNPJ</label>
-                  <input 
-                    value={formData.cnpj || ''} 
-                    onChange={e => setFormData({...formData, cnpj: e.target.value})} 
-                    placeholder="00.000.000/0001-00"
-                  />
+                  <input value={formData.cnpj || ''} onChange={e => setFormData({ ...formData, cnpj: e.target.value })} placeholder="00.000.000/0001-00" />
                 </div>
                 <div className="form-group flex-1">
                   <label className="form-label">Segmento</label>
-                  <input 
-                    value={formData.segment || ''} 
-                    onChange={e => setFormData({...formData, segment: e.target.value})} 
-                    placeholder="Ex: Tecnologia"
-                  />
+                  <input value={formData.segment || ''} onChange={e => setFormData({ ...formData, segment: e.target.value })} placeholder="Ex: Tecnologia" />
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="form-group flex-[2]">
-                  <label className="form-label">Site da Empresa (Website)</label>
-                  <input 
-                    value={formData.website || ''} 
-                    onChange={e => setFormData({...formData, website: e.target.value})} 
-                    placeholder="Ex: https://www.empresa.com.br"
-                  />
+                  <label className="form-label">Site da Empresa</label>
+                  <input value={formData.website || ''} onChange={e => setFormData({ ...formData, website: e.target.value })} placeholder="https://www.empresa.com.br" />
                 </div>
                 <div className="form-group flex-1">
-                  <label className="form-label">Telefone (Empresa)</label>
-                  <input 
-                    value={formData.phone || ''} 
-                    onChange={e => setFormData({...formData, phone: e.target.value})} 
-                    placeholder="(00) 0000-0000"
-                  />
+                  <label className="form-label">Telefone</label>
+                  <input value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="(00) 0000-0000" />
                 </div>
               </div>
 
               <h3 className="font-medium mt-4 mb-2 border-b pb-1 text-muted">Localização</h3>
               <div className="flex gap-4">
                 <div className="form-group flex-[2]">
-                  <label className="form-label">Endereço (Rua, Número, Complemento)</label>
-                  <input 
-                    value={formData.address || ''} 
-                    onChange={e => setFormData({...formData, address: e.target.value})} 
-                    placeholder="Ex: Av. Paulista, 1000 - Sala 42"
-                  />
+                  <label className="form-label">Endereço</label>
+                  <input value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Av. Paulista, 1000 - Sala 42" />
                 </div>
                 <div className="form-group flex-1">
                   <label className="form-label">CEP</label>
-                  <input 
-                    value={formData.zipCode || ''} 
-                    onChange={e => setFormData({...formData, zipCode: e.target.value})} 
-                    placeholder="00000-000"
-                  />
+                  <input value={formData.zipCode || ''} onChange={e => setFormData({ ...formData, zipCode: e.target.value })} placeholder="00000-000" />
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="form-group flex-1">
                   <label className="form-label">Bairro</label>
-                  <input 
-                    value={formData.neighborhood || ''} 
-                    onChange={e => setFormData({...formData, neighborhood: e.target.value})} 
-                    placeholder="Ex: Bela Vista"
-                  />
+                  <input value={formData.neighborhood || ''} onChange={e => setFormData({ ...formData, neighborhood: e.target.value })} placeholder="Ex: Bela Vista" />
                 </div>
                 <div className="form-group flex-1">
                   <label className="form-label">Cidade / UF</label>
-                  <input 
-                    value={formData.city || ''} 
-                    onChange={e => setFormData({...formData, city: e.target.value})} 
-                    placeholder="Ex: São Paulo / SP"
-                  />
+                  <input value={formData.city || ''} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="São Paulo / SP" />
                 </div>
               </div>
 
@@ -230,7 +180,6 @@ const Companies: React.FC = () => {
                     <UserPlus size={14} /> Adicionar Contato
                   </button>
                 </div>
-                
                 {contacts.map((contact, index) => (
                   <div key={contact.id} className="p-4 border border-color rounded-md mb-4 bg-gray-50">
                     <div className="flex justify-between mb-2">
@@ -266,7 +215,9 @@ const Companies: React.FC = () => {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={handleSave}>Salvar Empresa</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvando...' : 'Salvar Empresa'}
+              </button>
             </div>
           </div>
         </div>

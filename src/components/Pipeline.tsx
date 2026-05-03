@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
-import { Plus, Calendar, User, DollarSign, MessageCircle } from 'lucide-react';
-import { getOpportunities, saveOpportunities, getCompanies, getStageConfigs, saveStageConfigs, getCurrentUser } from '../store';
+import { Plus, Calendar, User, DollarSign } from 'lucide-react';
+import {
+  getOpportunities, saveOpportunity, deleteOpportunity,
+  getCompanies, getStageConfigs, saveStageConfigs, getCurrentUser
+} from '../store';
 import type { Opportunity, OpportunityStatus, Company, StageConfig } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
@@ -26,6 +29,8 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
   const [columns, setColumns] = useState<StageConfig[]>([]);
   const [opportunities, setLocalOpportunities] = useState<Opportunity[]>([]);
   const [companies, setLocalCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showStageModal, setShowStageModal] = useState(false);
   const [newStageName, setNewStageName] = useState('');
@@ -37,26 +42,26 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
   const isMaster = currentUser?.role === 'master';
 
   useEffect(() => {
-    setColumns(getStageConfigs());
-    const opps = getOpportunities();
-    setLocalOpportunities(opps);
-    const comps = getCompanies();
-    setLocalCompanies(comps);
-
-    if (initialEditOppId) {
-      const oppToEdit = opps.find(o => o.id === initialEditOppId);
-      if (oppToEdit) {
-        setFormData(oppToEdit);
-        setCompanySearch(comps.find(c => c.id === oppToEdit.companyId)?.fantasyName || '');
-        setShowModal(true);
-      }
-      if (onClearEdit) onClearEdit();
-    }
+    Promise.all([getStageConfigs(), getOpportunities(), getCompanies()])
+      .then(([cols, opps, comps]) => {
+        setColumns(cols);
+        setLocalOpportunities(opps);
+        setLocalCompanies(comps);
+        if (initialEditOppId) {
+          const oppToEdit = opps.find(o => o.id === initialEditOppId);
+          if (oppToEdit) {
+            setFormData(oppToEdit);
+            setCompanySearch(comps.find(c => c.id === oppToEdit.companyId)?.fantasyName || '');
+            setShowModal(true);
+          }
+          if (onClearEdit) onClearEdit();
+        }
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
-
     const { source, destination, type } = result;
 
     if (type === 'COLUMN') {
@@ -65,7 +70,7 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
       const [removed] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, removed);
       setColumns(newColumns);
-      saveStageConfigs(newColumns);
+      await saveStageConfigs(newColumns);
       return;
     }
 
@@ -74,29 +79,23 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
     const itemCopied = opportunities.find(o => o.id === result.draggableId);
     if (!itemCopied) return;
 
-    // Regra de Negócio: Impedir avanço sem Sócio ou Influenciador
     const destStatus = destination.droppableId as OpportunityStatus;
     const sourceStatus = source.droppableId as OpportunityStatus;
-    
     const destIndex = columns.findIndex(c => c.name === destStatus);
     const sourceIndex = columns.findIndex(c => c.name === sourceStatus);
-    
+
     if (destIndex > sourceIndex) {
       const company = companies.find(c => c.id === itemCopied.companyId);
       const hasValidContact = company?.contacts.some(c => c.profile === 'Sócio' || c.profile === 'Influenciador');
-      
       if (!hasValidContact) {
         alert('Não é possível avançar a oportunidade. A empresa vinculada precisa de pelo menos um Sócio ou Influenciador cadastrado.');
         return;
       }
     }
 
-    const updatedOpps = opportunities.map(o => 
-      o.id === itemCopied.id ? { ...o, status: destStatus } : o
-    );
-
-    setLocalOpportunities(updatedOpps);
-    saveOpportunities(updatedOpps);
+    const updated = { ...itemCopied, status: destStatus };
+    setLocalOpportunities(opportunities.map(o => o.id === updated.id ? updated : o));
+    await saveOpportunity(updated);
   };
 
   const openAdd = () => {
@@ -105,13 +104,13 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.companyId || !formData.estimatedValue) {
-      alert('Por favor, preencha o Nome da Oportunidade, selecione uma Empresa válida da lista e informe o Valor Estimado.');
+      alert('Por favor, preencha o Nome da Oportunidade, selecione uma Empresa válida e informe o Valor Estimado.');
       return;
     }
-
-    const newOpp: Opportunity = {
+    setSaving(true);
+    const opp: Opportunity = {
       id: formData.id || uuidv4(),
       companyId: formData.companyId,
       name: formData.name,
@@ -122,41 +121,35 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
       tasks: formData.tasks || [],
       nextFollowUp: formData.nextFollowUp,
       lastFollowUpNotes: formData.lastFollowUpNotes,
-      isLost: formData.isLost || false
+      isLost: formData.isLost || false,
     };
-
-    const updated = formData.id 
-      ? opportunities.map(o => o.id === formData.id ? newOpp : o)
-      : [...opportunities, newOpp];
-
+    await saveOpportunity(opp);
+    const updated = formData.id
+      ? opportunities.map(o => o.id === formData.id ? opp : o)
+      : [...opportunities, opp];
     setLocalOpportunities(updated);
-    saveOpportunities(updated);
+    setShowModal(false);
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    if (!formData.id) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta oportunidade permanentemente?')) return;
+    await deleteOpportunity(formData.id);
+    setLocalOpportunities(opportunities.filter(o => o.id !== formData.id));
     setShowModal(false);
   };
 
-  const handleDelete = () => {
-    if (!formData.id) return;
-    if (window.confirm('Tem certeza que deseja excluir esta oportunidade permanentemente?')) {
-      const updated = opportunities.filter(o => o.id !== formData.id);
-      setLocalOpportunities(updated);
-      saveOpportunities(updated);
-      setShowModal(false);
-    }
-  };
-
-  const getCompany = (id: string) => companies.find(c => c.id === id);
-
-  const handleSaveStage = () => {
-    if (!newStageName.trim()) {
-      alert('Por favor, informe o nome da etapa.');
-      return;
-    }
+  const handleSaveStage = async () => {
+    if (!newStageName.trim()) { alert('Por favor, informe o nome da etapa.'); return; }
     const newConfig: StageConfig = { name: newStageName.trim(), colorTheme: newStageColor };
     const newColumns = [...columns, newConfig];
     setColumns(newColumns);
-    saveStageConfigs(newColumns);
+    await saveStageConfigs(newColumns);
     setShowStageModal(false);
   };
+
+  const getCompany = (id: string) => companies.find(c => c.id === id);
 
   return (
     <>
@@ -168,108 +161,106 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
       </header>
 
       <div className="page-body">
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="kanban-board">
-            <Droppable droppableId="board" direction="horizontal" type="COLUMN">
-              {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  style={{ display: 'flex', gap: '1.5rem', height: '100%' }}
-                >
-                  {columns.map((columnConfig, index) => {
-                    const column = columnConfig.name;
-                    const colorTheme = COLUMN_COLORS[columnConfig.colorTheme % COLUMN_COLORS.length];
-                    return (
-                      <Draggable key={column} draggableId={column} index={index}>
-                        {(provided, snapshot) => (
-                          <div 
-                            className="kanban-column" 
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={{ 
-                              backgroundColor: colorTheme.bg, 
-                              borderTop: `3px solid ${colorTheme.border}`,
-                              ...provided.draggableProps.style
-                            }}
-                          >
-                            <div className="kanban-column-header" {...provided.dragHandleProps} style={{ cursor: 'grab' }}>
-                              <div className="kanban-column-title" style={{ color: colorTheme.text }}>
-                                {column}
-                                <span className="badge">{opportunities.filter(o => !o.isLost && o.status === column).length}</span>
-                              </div>
-                            </div>
-                            
-                            <Droppable droppableId={column} type="CARD">
-                              {(provided, snapshot) => (
-                                <div
-                                  className="kanban-cards"
-                                  ref={provided.innerRef}
-                                  {...provided.droppableProps}
-                                  style={{ backgroundColor: snapshot.isDraggingOver ? 'rgba(79, 70, 229, 0.05)' : '' }}
-                                >
-                                  {opportunities.filter(o => !o.isLost && o.status === column).map((opp, index) => (
-                                    <Draggable key={opp.id} draggableId={opp.id} index={index} isDragDisabled={!isMaster}>
-                                      {(provided, snapshot) => (
-                                        <div
-                                          className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
-                                          {...provided.dragHandleProps}
-                                          onClick={() => { 
-                                            setFormData(opp); 
-                                            setCompanySearch(getCompany(opp.companyId)?.fantasyName || '');
-                                            setShowModal(true); 
-                                          }}
-                                        >
-                                          <div className="card-title">{opp.name}</div>
-                                          <div className="card-company">
-                                            {getCompany(opp.companyId)?.fantasyName || 'Empresa Desconhecida'}
-                                          </div>
-                                          {opp.nextFollowUp && (
-                                            <div className="card-followup">
-                                              <Calendar size={12} /> Próx: {format(new Date(opp.nextFollowUp), 'dd/MM/yyyy')}
-                                            </div>
-                                          )}
-                                          {opp.lastFollowUpNotes && (
-                                            <div className="card-last-notes">
-                                              <strong>Último:</strong> {opp.lastFollowUpNotes.length > 60 ? opp.lastFollowUpNotes.substring(0, 60) + '...' : opp.lastFollowUpNotes}
-                                            </div>
-                                          )}
-                                          <div className="card-footer">
-                                            <div className="flex items-center gap-1 text-muted">
-                                              <User size={14} /> {opp.responsible}
-                                            </div>
-                                            <div className="card-value">
-                                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opp.estimatedValue)}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </Draggable>
-                                  ))}
-                                  {provided.placeholder}
+        {loading ? (
+          <div className="p-8 text-center text-muted">Carregando pipeline...</div>
+        ) : (
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="kanban-board">
+              <Droppable droppableId="board" direction="horizontal" type="COLUMN">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} style={{ display: 'flex', gap: '1.5rem', height: '100%' }}>
+                    {columns.map((columnConfig, index) => {
+                      const column = columnConfig.name;
+                      const colorTheme = COLUMN_COLORS[columnConfig.colorTheme % COLUMN_COLORS.length];
+                      return (
+                        <Draggable key={column} draggableId={column} index={index}>
+                          {(provided) => (
+                            <div
+                              className="kanban-column"
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              style={{ backgroundColor: colorTheme.bg, borderTop: `3px solid ${colorTheme.border}`, ...provided.draggableProps.style }}
+                            >
+                              <div className="kanban-column-header" {...provided.dragHandleProps} style={{ cursor: 'grab' }}>
+                                <div className="kanban-column-title" style={{ color: colorTheme.text }}>
+                                  {column}
+                                  <span className="badge">{opportunities.filter(o => !o.isLost && o.status === column).length}</span>
                                 </div>
-                              )}
-                            </Droppable>
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-                  {provided.placeholder}
+                              </div>
+
+                              <Droppable droppableId={column} type="CARD">
+                                {(provided, snapshot) => (
+                                  <div
+                                    className="kanban-cards"
+                                    ref={provided.innerRef}
+                                    {...provided.droppableProps}
+                                    style={{ backgroundColor: snapshot.isDraggingOver ? 'rgba(79, 70, 229, 0.05)' : '' }}
+                                  >
+                                    {opportunities.filter(o => !o.isLost && o.status === column).map((opp, index) => (
+                                      <Draggable key={opp.id} draggableId={opp.id} index={index} isDragDisabled={!isMaster}>
+                                        {(provided, snapshot) => (
+                                          <div
+                                            className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            {...provided.dragHandleProps}
+                                            onClick={() => {
+                                              setFormData(opp);
+                                              setCompanySearch(getCompany(opp.companyId)?.fantasyName || '');
+                                              setShowModal(true);
+                                            }}
+                                          >
+                                            <div className="card-title">{opp.name}</div>
+                                            <div className="card-company">{getCompany(opp.companyId)?.fantasyName || 'Empresa Desconhecida'}</div>
+                                            {opp.nextFollowUp && (
+                                              <div className="card-followup">
+                                                <Calendar size={12} /> Próx: {format(new Date(opp.nextFollowUp), 'dd/MM/yyyy')}
+                                              </div>
+                                            )}
+                                            {opp.lastFollowUpNotes && (
+                                              <div className="card-last-notes">
+                                                <strong>Último:</strong> {opp.lastFollowUpNotes.length > 60 ? opp.lastFollowUpNotes.substring(0, 60) + '...' : opp.lastFollowUpNotes}
+                                              </div>
+                                            )}
+                                            <div className="card-footer">
+                                              <div className="flex items-center gap-1 text-muted">
+                                                <User size={14} /> {opp.responsible}
+                                              </div>
+                                              <div className="card-value">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opp.estimatedValue)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+              {isMaster && (
+                <div
+                  className="kanban-column"
+                  style={{ background: 'transparent', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  onClick={() => { setNewStageName(''); setNewStageColor(0); setShowStageModal(true); }}
+                >
+                  <div className="flex items-center gap-2 text-muted font-medium p-4">
+                    <Plus size={20} /> Nova Etapa
+                  </div>
                 </div>
               )}
-            </Droppable>
-            {isMaster && (
-              <div className="kanban-column" style={{ background: 'transparent', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => { setNewStageName(''); setNewStageColor(0); setShowStageModal(true); }}>
-                <div className="flex items-center gap-2 text-muted font-medium p-4">
-                  <Plus size={20} /> Nova Etapa
-                </div>
-              </div>
-            )}
-          </div>
-        </DragDropContext>
+            </div>
+          </DragDropContext>
+        )}
       </div>
 
       {showModal && (
@@ -282,24 +273,17 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Nome da Oportunidade</label>
-                <input 
-                  value={formData.name || ''} 
-                  onChange={e => setFormData({...formData, name: e.target.value})} 
-                />
+                <input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Empresa</label>
-                <input 
+                <input
                   list="companies-list"
                   value={companySearch}
                   onChange={e => {
                     setCompanySearch(e.target.value);
                     const found = companies.find(c => c.fantasyName === e.target.value);
-                    if (found) {
-                      setFormData({...formData, companyId: found.id});
-                    } else {
-                      setFormData({...formData, companyId: ''});
-                    }
+                    setFormData({ ...formData, companyId: found ? found.id : '' });
                   }}
                   placeholder="Digite para buscar a empresa..."
                 />
@@ -310,28 +294,20 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
               <div className="flex gap-4">
                 <div className="form-group flex-1">
                   <label className="form-label">Valor Estimado (LTV/MRR)</label>
-                  <input 
-                    type="number"
-                    value={formData.estimatedValue || ''} 
-                    onChange={e => setFormData({...formData, estimatedValue: Number(e.target.value)})} 
-                  />
+                  <input type="number" value={formData.estimatedValue || ''} onChange={e => setFormData({ ...formData, estimatedValue: Number(e.target.value) })} />
                 </div>
                 <div className="form-group flex-1">
                   <label className="form-label">Data de Fechamento Prevista</label>
-                  <input 
-                    type="date"
-                    value={formData.expectedClosingDate || ''} 
-                    onChange={e => setFormData({...formData, expectedClosingDate: e.target.value})} 
-                  />
+                  <input type="date" value={formData.expectedClosingDate || ''} onChange={e => setFormData({ ...formData, expectedClosingDate: e.target.value })} />
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="form-group flex-1">
                   <label className="form-label">Responsável</label>
-                  <input 
+                  <input
                     list="responsibles-list"
-                    value={formData.responsible || ''} 
-                    onChange={e => setFormData({...formData, responsible: e.target.value})} 
+                    value={formData.responsible || ''}
+                    onChange={e => setFormData({ ...formData, responsible: e.target.value })}
                     placeholder="Ex: Michel"
                   />
                   <datalist id="responsibles-list">
@@ -342,38 +318,25 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
                 </div>
                 <div className="form-group flex-1">
                   <label className="form-label">Status</label>
-                  <select 
-                    value={formData.status || (columns.length > 0 ? columns[0].name : '')} 
-                    onChange={e => setFormData({...formData, status: e.target.value as OpportunityStatus})}
-                  >
+                  <select value={formData.status || (columns.length > 0 ? columns[0].name : '')} onChange={e => setFormData({ ...formData, status: e.target.value as OpportunityStatus })}>
                     {columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                   </select>
                 </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Próximo Follow-up</label>
-                <input 
-                  type="datetime-local"
-                  value={formData.nextFollowUp || ''} 
-                  onChange={e => setFormData({...formData, nextFollowUp: e.target.value})} 
-                />
-                <small className="text-muted block mt-1">Ao definir o follow-up, o histórico da empresa será atualizado automaticamente se houver notas em uma futura atualização.</small>
+                <input type="datetime-local" value={formData.nextFollowUp || ''} onChange={e => setFormData({ ...formData, nextFollowUp: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Resumo do Último Follow-up</label>
-                <textarea 
-                  rows={3}
-                  value={formData.lastFollowUpNotes || ''} 
-                  onChange={e => setFormData({...formData, lastFollowUpNotes: e.target.value})} 
-                  placeholder="Ex: Cliente pediu para retornar semana que vem com a proposta comercial revisada..."
-                />
+                <textarea rows={3} value={formData.lastFollowUpNotes || ''} onChange={e => setFormData({ ...formData, lastFollowUpNotes: e.target.value })} placeholder="Ex: Cliente pediu para retornar semana que vem..." />
               </div>
               <div className="form-group flex items-center gap-2 mt-4 p-3 rounded" style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5' }}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="isLost"
-                  checked={formData.isLost || false} 
-                  onChange={e => setFormData({...formData, isLost: e.target.checked})} 
+                  checked={formData.isLost || false}
+                  onChange={e => setFormData({ ...formData, isLost: e.target.checked })}
                   style={{ width: '1rem', height: '1rem', cursor: 'pointer' }}
                   disabled={!!formData.id && !isMaster}
                 />
@@ -385,13 +348,15 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
             </div>
             <div className="modal-footer" style={{ justifyContent: formData.id ? 'space-between' : 'flex-end' }}>
               {formData.id && isMaster && (
-                <button className="btn btn-danger" onClick={handleDelete}>
-                  Excluir
-                </button>
+                <button className="btn btn-danger" onClick={handleDelete} disabled={saving}>Excluir</button>
               )}
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                {(!formData.id || isMaster) && <button className="btn btn-primary" onClick={handleSave}>Salvar Oportunidade</button>}
+                {(!formData.id || isMaster) && (
+                  <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    {saving ? 'Salvando...' : 'Salvar Oportunidade'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -408,11 +373,7 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Nome da Etapa</label>
-                <input 
-                  value={newStageName} 
-                  onChange={e => setNewStageName(e.target.value)} 
-                  placeholder="Ex: Qualificação"
-                />
+                <input value={newStageName} onChange={e => setNewStageName(e.target.value)} placeholder="Ex: Qualificação" />
               </div>
               <div className="form-group">
                 <label className="form-label">Cor da Etapa</label>
@@ -422,20 +383,14 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
                       key={idx}
                       onClick={() => setNewStageColor(idx)}
                       style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
+                        width: '32px', height: '32px', borderRadius: '50%',
                         backgroundColor: color.bg,
                         border: `2px solid ${newStageColor === idx ? color.border : 'transparent'}`,
                         boxShadow: newStageColor === idx ? '0 0 0 2px var(--surface-color), 0 0 0 4px var(--primary-color)' : 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0
                       }}
-                      title={`Cor ${idx + 1}`}
                     >
-                      <div style={{ width: '60%', height: '60%', borderRadius: '50%', backgroundColor: color.border }}></div>
+                      <div style={{ width: '60%', height: '60%', borderRadius: '50%', backgroundColor: color.border }} />
                     </button>
                   ))}
                 </div>

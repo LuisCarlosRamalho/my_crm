@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Building2, Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
-import { getUsers, saveUsers, setCurrentUser } from '../store';
+import { getUsers, saveUsers, setCurrentUser, ensureMasterUser } from '../store';
 import type { User } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
@@ -15,81 +15,75 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const validatePassword = (pass: string) => {
-    const hasUpperCase = /[A-Z]/.test(pass);
-    const hasNumbers = /[0-9]/.test(pass);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
-    const isValidLength = pass.length >= 8;
-    
-    if (!isValidLength) return 'A senha deve ter pelo menos 8 caracteres.';
-    if (!hasUpperCase) return 'A senha deve conter pelo menos uma letra maiúscula.';
-    if (!hasNumbers) return 'A senha deve conter pelo menos um número.';
-    if (!hasSpecialChar) return 'A senha deve conter pelo menos um caractere especial.';
-    
+    if (pass.length < 8) return 'A senha deve ter pelo menos 8 caracteres.';
+    if (!/[A-Z]/.test(pass)) return 'A senha deve conter pelo menos uma letra maiúscula.';
+    if (!/[0-9]/.test(pass)) return 'A senha deve conter pelo menos um número.';
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(pass)) return 'A senha deve conter pelo menos um caractere especial.';
     return null;
   };
 
-  const validateEmail = (mail: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+  const validateEmail = (mail: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await ensureMasterUser();
+      const users = await getUsers();
+      const user = users.find(u =>
+        (u.email.toLowerCase() === email.toLowerCase() || u.name.toLowerCase() === email.toLowerCase()) &&
+        u.passwordHash === CryptoJS.SHA256(password).toString()
+      );
+      if (user) {
+        setCurrentUser(user);
+        onLoginSuccess();
+      } else {
+        setError('Credenciais inválidas. Verifique seu e-mail/usuário e senha.');
+      }
+    } catch (err) {
+      setError('Erro ao conectar com o banco de dados. Tente novamente.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const users = getUsers();
-    // Allow login by name (for master) or email
-    const user = users.find(u => 
-      (u.email.toLowerCase() === email.toLowerCase() || u.name.toLowerCase() === email.toLowerCase()) && 
-      u.passwordHash === CryptoJS.SHA256(password).toString()
-    );
-
-    if (user) {
-      setCurrentUser(user);
-      onLoginSuccess();
-    } else {
-      setError('Credenciais inválidas. Verifique seu e-mail/usuário e senha.');
-    }
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!name.trim()) {
-      setError('Por favor, informe seu nome.');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError('Por favor, informe um e-mail válido.');
-      return;
-    }
-
+    if (!name.trim()) { setError('Por favor, informe seu nome.'); return; }
+    if (!validateEmail(email)) { setError('Por favor, informe um e-mail válido.'); return; }
     const passError = validatePassword(password);
-    if (passError) {
-      setError(passError);
-      return;
+    if (passError) { setError(passError); return; }
+
+    setLoading(true);
+    try {
+      const users = await getUsers();
+      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        setError('Este e-mail já está em uso.');
+        return;
+      }
+      const newUser: User = {
+        id: uuidv4(),
+        name,
+        email,
+        passwordHash: CryptoJS.SHA256(password).toString(),
+        role: 'user',
+      };
+      await saveUsers([...users, newUser]);
+      setCurrentUser(newUser);
+      onLoginSuccess();
+    } catch (err) {
+      setError('Erro ao criar conta. Tente novamente.');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-
-    const users = getUsers();
-    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-      setError('Este e-mail já está em uso.');
-      return;
-    }
-
-    const newUser: User = {
-      id: uuidv4(),
-      name,
-      email,
-      passwordHash: CryptoJS.SHA256(password).toString(),
-      role: 'user'
-    };
-
-    saveUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    onLoginSuccess();
   };
 
   return (
@@ -115,17 +109,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem' }}>Nome Completo</label>
               <div style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
-                  <UserIcon size={18} />
-                </div>
-                <input 
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none', transition: 'border-color 0.2s' }}
-                  placeholder="Seu nome"
-                />
+                <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}><UserIcon size={18} /></div>
+                <input type="text" required value={name} onChange={e => setName(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none' }}
+                  placeholder="Seu nome" />
               </div>
             </div>
           )}
@@ -133,66 +120,39 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem' }}>{isRegistering ? 'E-mail' : 'Usuário ou E-mail'}</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
-                <Mail size={18} />
-              </div>
-              <input 
-                type={isRegistering ? 'email' : 'text'}
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none', transition: 'border-color 0.2s' }}
-                placeholder={isRegistering ? 'seu@email.com' : 'E-mail ou nome de usuário'}
-              />
+              <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}><Mail size={18} /></div>
+              <input type={isRegistering ? 'email' : 'text'} required value={email} onChange={e => setEmail(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none' }}
+                placeholder={isRegistering ? 'seu@email.com' : 'E-mail ou nome de usuário'} />
             </div>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem' }}>Senha</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}>
-                <Lock size={18} />
-              </div>
-              <input 
-                type="password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none', transition: 'border-color 0.2s' }}
-                placeholder="Sua senha secreta"
-              />
+              <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}><Lock size={18} /></div>
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none' }}
+                placeholder="Sua senha secreta" />
             </div>
             {isRegistering && (
               <ul style={{ marginTop: '0.5rem', paddingLeft: '1.25rem', fontSize: '0.75rem', color: '#6B7280', margin: '0.5rem 0 0 0' }}>
-                <li>Mínimo 8 caracteres</li>
-                <li>1 Letra maiúscula</li>
-                <li>1 Número</li>
-                <li>1 Caractere especial (!@#$%)</li>
+                <li>Mínimo 8 caracteres</li><li>1 Letra maiúscula</li><li>1 Número</li><li>1 Caractere especial (!@#$%)</li>
               </ul>
             )}
           </div>
 
-          <button 
-            type="submit"
-            style={{ width: '100%', backgroundColor: '#4F46E5', color: 'white', padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 600, border: 'none', cursor: 'pointer', marginTop: '0.5rem', transition: 'background-color 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.backgroundColor = '#4338CA'}
-            onMouseOut={e => e.currentTarget.style.backgroundColor = '#4F46E5'}
-          >
-            {isRegistering ? 'Criar Conta' : 'Entrar'}
+          <button type="submit" disabled={loading}
+            style={{ width: '100%', backgroundColor: loading ? '#6366F1' : '#4F46E5', color: 'white', padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 600, border: 'none', cursor: loading ? 'wait' : 'pointer', marginTop: '0.5rem' }}>
+            {loading ? 'Aguarde...' : isRegistering ? 'Criar Conta' : 'Entrar'}
           </button>
         </form>
 
         <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#4B5563' }}>
           {isRegistering ? 'Já tem uma conta?' : 'Ainda não tem cadastro?'}
-          <button 
-            type="button"
+          <button type="button"
             style={{ color: '#4F46E5', fontWeight: 600, marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              setError('');
-              setPassword('');
-            }}
-          >
+            onClick={() => { setIsRegistering(!isRegistering); setError(''); setPassword(''); }}>
             {isRegistering ? 'Fazer login' : 'Criar conta'}
           </button>
         </div>

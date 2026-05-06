@@ -75,10 +75,20 @@ export interface User {
   name: string;
   email: string;
   passwordHash: string;
-  role: 'master' | 'user';
+  role: 'ultra_admin' | 'master' | 'user';
   phone?: string;
   roleTitle?: string;
   companyName?: string;
+}
+
+export interface SystemLog {
+  id: string;
+  created_at: string;
+  user_name: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: string;
 }
 
 // ============================================================
@@ -138,12 +148,14 @@ export const saveUsers = async (users: User[]): Promise<void> => {
     };
     const { error } = await supabase.from('users').upsert(row, { onConflict: 'id' });
     if (error) console.error('Erro ao salvar usuário:', error);
+    else await logAction('UPDATE/CREATE', 'USER', user.id, `Usuário salvo: ${user.name} (${user.role})`);
   }
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
   const { error } = await supabase.from('users').delete().eq('id', id);
   if (error) console.error('Erro ao deletar usuário:', error);
+  else await logAction('DELETE', 'USER', id, `Usuário deletado`);
 };
 
 export const ensureMasterUser = async (): Promise<void> => {
@@ -234,6 +246,8 @@ export const saveCompany = async (company: Company): Promise<void> => {
   const { error } = await supabase.from('companies').upsert(row, { onConflict: 'id' });
   if (error) { console.error('Erro ao salvar empresa:', error); return; }
 
+  await logAction('UPDATE/CREATE', 'COMPANY', company.id, `Empresa salva: ${company.fantasyName}`);
+
   // Sincronizar contatos
   await supabase.from('contacts').delete().eq('company_id', company.id);
   if (company.contacts.length > 0) {
@@ -275,6 +289,7 @@ export const saveCompanies = async (companies: Company[]): Promise<void> => {
 export const deleteCompany = async (id: string): Promise<void> => {
   const { error } = await supabase.from('companies').delete().eq('id', id);
   if (error) console.error('Erro ao deletar empresa:', error);
+  else await logAction('DELETE', 'COMPANY', id, `Empresa deletada`);
 };
 
 // ============================================================
@@ -332,6 +347,8 @@ export const saveOpportunity = async (opp: Opportunity): Promise<void> => {
   const { error } = await supabase.from('opportunities').upsert(row, { onConflict: 'id' });
   if (error) { console.error('Erro ao salvar oportunidade:', error); return; }
 
+  await logAction('UPDATE/CREATE', 'OPPORTUNITY', opp.id, `Oportunidade salva: ${opp.name} (Status: ${opp.status})`);
+
   // Sincronizar tarefas
   await supabase.from('tasks').delete().eq('opportunity_id', opp.id);
   if (opp.tasks.length > 0) {
@@ -355,6 +372,7 @@ export const saveOpportunities = async (opps: Opportunity[]): Promise<void> => {
 export const deleteOpportunity = async (id: string): Promise<void> => {
   const { error } = await supabase.from('opportunities').delete().eq('id', id);
   if (error) console.error('Erro ao deletar oportunidade:', error);
+  else await logAction('DELETE', 'OPPORTUNITY', id, `Oportunidade deletada`);
 };
 
 // ============================================================
@@ -410,9 +428,40 @@ export const saveStages = async (stages: string[]): Promise<void> => {
     return existing || { name, colorTheme: index % 7 };
   });
   await saveStageConfigs(newConfigs);
+  await logAction('UPDATE', 'PIPELINE_STAGES', 'all', `Estágios do funil atualizados`);
+};
+
+// ============================================================
+// LOGS DE SISTEMA
+// ============================================================
+
+export const getLogs = async (): Promise<SystemLog[]> => {
+  const { data, error } = await supabase.from('logs').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Erro ao buscar logs:', error);
+    return [];
+  }
+  return data || [];
+};
+
+export const logAction = async (action: string, entity_type: string, entity_id: string, details: string): Promise<void> => {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  const row = {
+    id: uuidv4(),
+    created_at: new Date().toISOString(),
+    user_name: currentUser.name,
+    action,
+    entity_type,
+    entity_id,
+    details
+  };
+  const { error } = await supabase.from('logs').insert([row]);
+  if (error) console.error('Erro ao salvar log:', error);
 };
 
 // ============================================================
 // EXPORTAR uuidv4 para uso nos componentes
 // ============================================================
 export { uuidv4 };
+

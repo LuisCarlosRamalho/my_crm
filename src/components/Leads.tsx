@@ -146,7 +146,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
 
   const currentUser = getCurrentUser();
   const isEdit = !!formData.id;
-  const canEdit = currentUser?.role === 'master' || !isEdit;
+  const canEdit = ['master', 'ultra_admin'].includes(currentUser?.role as string) || !isEdit;
 
   // ─── MODAL VIEW ───────────────────────────────────────────────────
   if (showModal) {
@@ -318,7 +318,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
               <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
                 {activities.map(activity => {
                   const colors = getActivityColor(activity.type);
-                  const isMasterUser = currentUser?.role === 'master';
+                  const isMasterUser = ['master', 'ultra_admin'].includes(currentUser?.role as string);
                   return (
                     <div key={activity.id} style={{ backgroundColor: colors.bg, border: `1px solid ${colors.border}`, padding: '1.25rem 1.5rem', marginBottom: '1.25rem', borderRadius: '0.75rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                       <div className="flex justify-between items-start mb-3">

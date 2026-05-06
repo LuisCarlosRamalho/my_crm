@@ -159,8 +159,8 @@ export const deleteUser = async (id: string): Promise<void> => {
 };
 
 export const ensureMasterUser = async (): Promise<void> => {
-  const { data } = await supabase.from('users').select('id').eq('role', 'master').maybeSingle();
-  if (!data) {
+  const { data } = await supabase.from('users').select('id').in('role', ['master', 'ultra_admin']).limit(1);
+  if (!data || data.length === 0) {
     const masterUser = {
       id: 'master-user-1',
       name: 'Luis Carlos',

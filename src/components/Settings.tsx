@@ -96,7 +96,7 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     showMessage('Usuário excluído.');
   };
 
-  const handleRoleChange = async (id: string, newRole: 'ultra_admin' | 'master' | 'user') => {
+  const handleRoleChange = async (id: string, newRole: 'master' | 'user') => {
     if (id === currentUser?.id) { alert('Você não pode alterar seu próprio nível de acesso aqui.'); return; }
     const userToUpdate = users.find(u => u.id === id);
     if (!userToUpdate) return;
@@ -172,9 +172,9 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
                       <input
                         value={companyName}
                         onChange={e => setCompanyName(e.target.value)}
-                        style={{ paddingLeft: '2.25rem', backgroundColor: !['master', 'ultra_admin'].includes(currentUser.role) ? '#F1F5F9' : 'var(--surface-color)', cursor: !['master', 'ultra_admin'].includes(currentUser.role) ? 'not-allowed' : 'text' }}
+                        style={{ paddingLeft: '2.25rem', backgroundColor: currentUser.role !== 'master' ? '#F1F5F9' : 'var(--surface-color)', cursor: currentUser.role !== 'master' ? 'not-allowed' : 'text' }}
                         placeholder="Sua Empresa"
-                        disabled={!['master', 'ultra_admin'].includes(currentUser.role)}
+                        disabled={currentUser.role !== 'master'}
                       />
                     </div>
                   </div>
@@ -203,11 +203,11 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
               </form>
             </div>
 
-            {/* Painel Master / Ultra Admin */}
-            {['master', 'ultra_admin'].includes(currentUser.role) && (
+            {/* Painel Master */}
+            {currentUser.role === 'master' && (
               <div style={{ gridColumn: 'span 6', backgroundColor: 'var(--surface-color)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', color: currentUser.role === 'ultra_admin' ? '#9333EA' : '#4338CA' }}>
-                  <Shield size={20} /> Painel {currentUser.role === 'ultra_admin' ? 'Ultra Admin' : 'Master'} - Gerenciar Usuários
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', color: '#4338CA' }}>
+                  <Shield size={20} /> Painel Master - Gerenciar Usuários
                 </h2>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -217,16 +217,15 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
                         <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           {u.name}
                           {u.id === currentUser.id ? (
-                            <span className="badge" style={{ backgroundColor: u.role === 'ultra_admin' ? '#E9D5FF' : '#FEF08A', color: u.role === 'ultra_admin' ? '#6B21A8' : '#854D0E', fontSize: '0.65rem' }}>{u.role === 'ultra_admin' ? 'Ultra Admin' : 'Master'}</span>
+                            <span className="badge" style={{ backgroundColor: '#FEF08A', color: '#854D0E', fontSize: '0.65rem' }}>Master</span>
                           ) : (
                             <select
                               value={u.role || 'user'}
-                              onChange={e => handleRoleChange(u.id, e.target.value as 'ultra_admin' | 'master' | 'user')}
-                              style={{ fontSize: '0.65rem', padding: '0.1rem 0.5rem', borderRadius: '1rem', backgroundColor: u.role === 'ultra_admin' ? '#E9D5FF' : u.role === 'master' ? '#FEF08A' : '#E2E8F0', color: u.role === 'ultra_admin' ? '#6B21A8' : u.role === 'master' ? '#854D0E' : '#475569', border: 'none', outline: 'none', cursor: 'pointer', fontWeight: 600 }}
+                              onChange={e => handleRoleChange(u.id, e.target.value as 'master' | 'user')}
+                              style={{ fontSize: '0.65rem', padding: '0.1rem 0.5rem', borderRadius: '1rem', backgroundColor: u.role === 'master' ? '#FEF08A' : '#E2E8F0', color: u.role === 'master' ? '#854D0E' : '#475569', border: 'none', outline: 'none', cursor: 'pointer', fontWeight: 600 }}
                             >
                               <option value="user">Basic</option>
                               <option value="master">Master</option>
-                              {currentUser.role === 'ultra_admin' && <option value="ultra_admin">Ultra Admin</option>}
                             </select>
                           )}
                         </div>

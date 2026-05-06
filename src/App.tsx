@@ -22,7 +22,7 @@ function App() {
     ensureMasterUser()
       .then(() => getUsers())
       .then(users => {
-        const master = users.find(u => ['master', 'ultra_admin'].includes(u.role));
+        const master = users.find(u => u.role === 'master');
         if (master?.companyName) setCrmName(master.companyName);
         setUser(getCurrentUser());
       })
@@ -33,7 +33,7 @@ function App() {
     const loggedUser = getCurrentUser();
     setUser(loggedUser);
     getUsers().then(users => {
-      const master = users.find(u => ['master', 'ultra_admin'].includes(u.role));
+      const master = users.find(u => u.role === 'master');
       if (master?.companyName) setCrmName(master.companyName);
     });
   };
@@ -47,7 +47,7 @@ function App() {
     const updated = getCurrentUser();
     setUser(updated);
     getUsers().then(users => {
-      const master = users.find(u => ['master', 'ultra_admin'].includes(u.role));
+      const master = users.find(u => u.role === 'master');
       if (master?.companyName) setCrmName(master.companyName);
     });
   };
@@ -88,7 +88,7 @@ function App() {
           <a href="#" className={`nav-item ${currentView === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentView('settings'); }}>
             <SettingsIcon size={20} /> Configurações
           </a>
-          {user.role === 'ultra_admin' && (
+          {user.role === 'master' && (
             <a href="#" className={`nav-item ${currentView === 'logs' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setCurrentView('logs'); }}>
               <FileText size={20} /> Logs (Auditoria)
             </a>

@@ -75,7 +75,7 @@ export interface User {
   name: string;
   email: string;
   passwordHash: string;
-  role: 'ultra_admin' | 'master' | 'user';
+  role: 'master' | 'user';
   phone?: string;
   roleTitle?: string;
   companyName?: string;
@@ -159,8 +159,8 @@ export const deleteUser = async (id: string): Promise<void> => {
 };
 
 export const ensureMasterUser = async (): Promise<void> => {
-  const { data } = await supabase.from('users').select('id').in('role', ['master', 'ultra_admin']).limit(1);
-  if (!data || data.length === 0) {
+  const { data } = await supabase.from('users').select('id').eq('role', 'master').maybeSingle();
+  if (!data) {
     const masterUser = {
       id: 'master-user-1',
       name: 'Luis Carlos',

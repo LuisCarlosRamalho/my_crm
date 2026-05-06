@@ -92,7 +92,7 @@ const Companies: React.FC = () => {
                 <div className="text-muted">{c.cnpj}</div>
                 <div>{c.segment}</div>
                 <div className="flex gap-2">
-                  {['master', 'ultra_admin'].includes(currentUser?.role as string) ? (
+                  {currentUser?.role === 'master' ? (
                     <>
                       <button className="text-muted hover:text-primary transition-colors" title="Editar" onClick={() => openEdit(c)}>
                         <Edit2 size={16} />

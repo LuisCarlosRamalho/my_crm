@@ -39,7 +39,7 @@ const Pipeline: React.FC<PipelineProps> = ({ initialEditOppId, onClearEdit }) =>
   const [companySearch, setCompanySearch] = useState('');
 
   const currentUser = getCurrentUser();
-  const isMaster = ['master', 'ultra_admin'].includes(currentUser?.role as string);
+  const isMaster = currentUser?.role === 'master';
 
   useEffect(() => {
     Promise.all([getStageConfigs(), getOpportunities(), getCompanies()])

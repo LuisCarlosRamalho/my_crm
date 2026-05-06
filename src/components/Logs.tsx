@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { SystemLog, getLogs } from '../store';
+import { getLogs } from '../store';
+import type { SystemLog } from '../store';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, User as UserIcon, Activity, Database } from 'lucide-react';

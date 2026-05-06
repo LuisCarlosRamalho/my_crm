@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building2, Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
 import { getUsers, saveUsers, setCurrentUser, ensureMasterUser } from '../store';
 import type { User } from '../store';
@@ -16,6 +16,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [crmName, setCrmName] = useState('CRM B2B');
+
+  useEffect(() => {
+    getUsers().then(users => {
+      const master = users.find(u => u.role === 'master');
+      if (master?.companyName) {
+        setCrmName(master.companyName);
+      }
+    });
+  }, []);
 
   const validatePassword = (pass: string) => {
     if (pass.length < 8) return 'A senha deve ter pelo menos 8 caracteres.';
@@ -93,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <div style={{ backgroundColor: '#EEF2FF', padding: '1rem', borderRadius: '50%', marginBottom: '1rem' }}>
             <Building2 size={32} color="#4F46E5" />
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#111827' }}>CRM B2B</h1>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#111827', textAlign: 'center' }}>{crmName}</h1>
           <p style={{ color: '#6B7280', fontSize: '0.875rem' }}>{isRegistering ? 'Crie sua conta para acessar' : 'Faça login para acessar o sistema'}</p>
         </div>
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell,
+  ComposedChart, Line
 } from 'recharts';
 import { getOpportunities, getCompanies, getStages } from '../store';
 import type { Opportunity, Company } from '../store';
@@ -53,6 +54,9 @@ const Dashboard: React.FC = () => {
     const winConv = qtd > 0 ? ((wonOpps.length / qtd) * 100).toFixed(1) : 0;
     return { name: stage, Quantidade: qtd, Valor: val, 'Conversão Ganho %': Number(winConv), fill: COLUMN_COLORS[index % COLUMN_COLORS.length] };
   });
+
+  const stageWithMostOpps = pipelineData.length > 0 ? [...pipelineData].sort((a, b) => b.Quantidade - a.Quantidade)[0] : null;
+  const stageWithHighestValue = pipelineData.length > 0 ? [...pipelineData].sort((a, b) => b.Valor - a.Valor)[0] : null;
 
   const wonLostData = [
     { name: 'Ganhas', Quantidade: wonOpps.length, Valor: closedValue, fill: '#10B981' },
@@ -203,6 +207,54 @@ const Dashboard: React.FC = () => {
                 <Tooltip formatter={(value: any) => [value, 'Empresas']} />
                 <Legend content={<CustomLegend />} />
               </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '2.5rem', marginBottom: '1rem', paddingLeft: '0.25rem' }}>Destaques do Pipeline</h2>
+        
+        <div className="dashboard-grid">
+          <div className="stat-card" style={{ gridColumn: 'span 6', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="stat-title" style={{ color: '#1E3A8A' }}>Etapa c/ Mais Oportunidades</h3>
+              <div className="p-2 bg-blue-200 text-blue-700 rounded-lg"><Target size={20} /></div>
+            </div>
+            <div className="stat-value" style={{ color: '#1D4ED8', fontSize: '1.5rem' }}>
+              {stageWithMostOpps && stageWithMostOpps.Quantidade > 0 ? stageWithMostOpps.name : 'Nenhuma'}
+            </div>
+            <div className="text-sm font-semibold mt-2" style={{ color: '#2563EB' }}>
+              {stageWithMostOpps && stageWithMostOpps.Quantidade > 0 ? `${stageWithMostOpps.Quantidade} oportunidades` : '-'}
+            </div>
+          </div>
+
+          <div className="stat-card" style={{ gridColumn: 'span 6', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="stat-title" style={{ color: '#064E3B' }}>Etapa c/ Maior Valor R$</h3>
+              <div className="p-2 bg-green-200 text-green-700 rounded-lg"><DollarSign size={20} /></div>
+            </div>
+            <div className="stat-value" style={{ color: '#047857', fontSize: '1.5rem' }}>
+              {stageWithHighestValue && stageWithHighestValue.Valor > 0 ? stageWithHighestValue.name : 'Nenhuma'}
+            </div>
+            <div className="text-sm font-semibold mt-2" style={{ color: '#059669' }}>
+              {stageWithHighestValue && stageWithHighestValue.Valor > 0 ? formatCurrency(stageWithHighestValue.Valor) : '-'}
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-grid mt-4">
+          <div className="chart-card" style={{ gridColumn: 'span 12' }}>
+            <h3 className="chart-header">Quantidade vs Valor por Etapa</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={pipelineData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" />
+                <YAxis yAxisId="left" orientation="left" stroke="#3B82F6" />
+                <YAxis yAxisId="right" orientation="right" stroke="#10B981" tickFormatter={(val) => `R$ ${val / 1000}k`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Bar yAxisId="left" dataKey="Quantidade" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Qtd Oportunidades" />
+                <Line yAxisId="right" type="monotone" dataKey="Valor" stroke="#10B981" strokeWidth={3} name="Valor (R$)" />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>

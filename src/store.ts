@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase';
 // ============================================================
 
 export type ContactProfile = 'Sócio' | 'Influenciador' | 'Contato Operacional';
-export type ActivityType = 'Telefone' | 'WhatsApp' | 'E-mail' | 'Visita' | 'Reunião' | 'Vídeochamada' | string;
+export type ActivityType = 'Telefone' | 'WhatsApp' | 'E-mail' | 'Visita' | 'Reunião' | 'Vídeochamada' | 'Acompanhamento Interno' | string;
 export type OpportunityStatus = string;
 
 export interface StageConfig {

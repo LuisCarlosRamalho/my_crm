@@ -13,6 +13,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     if (!name.trim()) { setError('Por favor, informe seu nome.'); return; }
     if (!validateEmail(email)) { setError('Por favor, informe um e-mail válido.'); return; }
+    if (email !== confirmEmail) { setError('Os e-mails não conferem.'); return; }
     const passError = validatePassword(password);
     if (passError) { setError(passError); return; }
 
@@ -137,6 +139,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
 
+          {isRegistering && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem' }}>Confirmar E-mail</label>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)', color: '#9CA3AF' }}><Mail size={18} /></div>
+                <input type="email" required value={confirmEmail} onChange={e => setConfirmEmail(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.5rem', border: '1px solid #D1D5DB', outline: 'none' }}
+                  placeholder="Confirme seu e-mail" />
+              </div>
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem' }}>Senha</label>
             <div style={{ position: 'relative' }}>
@@ -162,7 +176,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           {isRegistering ? 'Já tem uma conta?' : 'Ainda não tem cadastro?'}
           <button type="button"
             style={{ color: '#4F46E5', fontWeight: 600, marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            onClick={() => { setIsRegistering(!isRegistering); setError(''); setPassword(''); }}>
+            onClick={() => { setIsRegistering(!isRegistering); setError(''); setPassword(''); setConfirmEmail(''); }}>
             {isRegistering ? 'Fazer login' : 'Criar conta'}
           </button>
         </div>

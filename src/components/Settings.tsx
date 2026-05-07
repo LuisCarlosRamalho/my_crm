@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User as UserIcon, Phone, Briefcase, Building2, Lock, Shield, Trash2, Edit2 } from 'lucide-react';
-import { getUsers, saveUsers, getCurrentUser, setCurrentUser, deleteUser } from '../store';
+import { User as UserIcon, Phone, Briefcase, Building2, Lock, Shield, Trash2, Edit2, Mail, Plus } from 'lucide-react';
+import { getUsers, saveUsers, getCurrentUser, setCurrentUser, deleteUser, uuidv4 } from '../store';
 import type { User } from '../store';
 import CryptoJS from 'crypto-js';
 
@@ -16,6 +16,7 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
   const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -24,11 +25,17 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [adminNewPassword, setAdminNewPassword] = useState('');
 
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+
   useEffect(() => {
     const user = getCurrentUser();
     if (user) {
       setLocalCurrentUser(user);
       setName(user.name || '');
+      setEmail(user.email || '');
       setPhone(user.phone || '');
       setRoleTitle(user.roleTitle || '');
       setCompanyName(user.companyName || '');
@@ -54,8 +61,21 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    
+    // Validar e-mail
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert('Por favor, informe um e-mail válido.');
+      return;
+    }
+    if (email.toLowerCase() !== currentUser.email.toLowerCase()) {
+      if (users.some(u => u.email.toLowerCase() === email.toLowerCase() && u.id !== currentUser.id)) {
+        alert('Este e-mail já está em uso por outro usuário.');
+        return;
+      }
+    }
+
     setSaving(true);
-    const updatedUser = { ...currentUser, name, phone, roleTitle, companyName };
+    const updatedUser = { ...currentUser, name, email, phone, roleTitle, companyName };
     const updatedList = users.map(u => u.id === updatedUser.id ? updatedUser : u);
     await saveUsers(updatedList);
     setCurrentUser(updatedUser);
@@ -120,6 +140,43 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
     showMessage(`Senha de ${editingUser.name} alterada.`);
   };
 
+  const handleCreateUser = async () => {
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
+      alert('Preencha todos os campos.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUserEmail)) {
+      alert('E-mail inválido.');
+      return;
+    }
+    const passError = validatePassword(newUserPassword);
+    if (passError) { alert(passError); return; }
+
+    if (users.some(u => u.email.toLowerCase() === newUserEmail.toLowerCase())) {
+      alert('Este e-mail já está em uso.');
+      return;
+    }
+
+    setSaving(true);
+    const newUser: User = {
+      id: uuidv4(),
+      name: newUserName,
+      email: newUserEmail,
+      passwordHash: CryptoJS.SHA256(newUserPassword).toString(),
+      role: 'user',
+    };
+
+    const updatedList = [...users, newUser];
+    await saveUsers(updatedList);
+    setUsers(updatedList);
+    setIsCreatingUser(false);
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserPassword('');
+    showMessage('Novo usuário criado com sucesso!');
+    setSaving(false);
+  };
+
   if (!currentUser) return null;
 
   return (
@@ -149,6 +206,13 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
                 <div className="form-group mb-0">
                   <label className="form-label">Nome Completo</label>
                   <input value={name} onChange={e => setName(e.target.value)} required />
+                </div>
+                <div className="form-group mb-0">
+                  <label className="form-label">E-mail Pessoal</label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={{ paddingLeft: '2.25rem' }} placeholder="seu@email.com" />
+                  </div>
                 </div>
                 <div className="form-group mb-0">
                   <label className="form-label">Telefone de Contato</label>
@@ -206,8 +270,13 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
             {/* Painel Master */}
             {currentUser.role === 'master' && (
               <div style={{ gridColumn: 'span 6', backgroundColor: 'var(--surface-color)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', color: '#4338CA' }}>
-                  <Shield size={20} /> Painel Master - Gerenciar Usuários
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', color: '#4338CA' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Shield size={20} /> Painel Master - Gerenciar Usuários
+                  </div>
+                  <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem', height: 'fit-content' }} onClick={() => setIsCreatingUser(true)}>
+                    <Plus size={16} /> Criar Usuário
+                  </button>
                 </h2>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -271,6 +340,55 @@ const Settings: React.FC<SettingsProps> = ({ onProfileUpdate }) => {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setEditingUser(null)}>Cancelar</button>
               <button className="btn btn-primary" onClick={handleSaveAdminPassword}>Salvar Nova Senha</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreatingUser && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Criar Novo Usuário</h2>
+              <button onClick={() => setIsCreatingUser(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Nome Completo</label>
+                <input
+                  type="text"
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  placeholder="Nome do usuário"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">E-mail</label>
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={e => setNewUserEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Senha</label>
+                <input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={e => setNewUserPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                />
+                <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.5rem' }}>
+                  1 Maiúscula, 1 número, 1 caractere especial (!@#$%)
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsCreatingUser(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleCreateUser} disabled={saving}>
+                {saving ? 'Criando...' : 'Criar Usuário'}
+              </button>
             </div>
           </div>
         </div>

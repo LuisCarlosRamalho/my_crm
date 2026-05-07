@@ -40,12 +40,12 @@ const Dashboard: React.FC = () => {
   }
 
   const totalValue = opportunities.reduce((acc, curr) => acc + curr.estimatedValue, 0);
-  const averageTicket = opportunities.length > 0 ? totalValue / opportunities.length : 0;
   const lastStage = stages.length > 0 ? stages[stages.length - 1] : 'Fechamento';
   const wonOpps = opportunities.filter(o => o.status === lastStage && !o.isLost);
   const lostOpps = opportunities.filter(o => o.isLost);
   const activeOpps = opportunities.filter(o => !o.isLost);
   const closedValue = wonOpps.reduce((acc, curr) => acc + curr.estimatedValue, 0);
+  const averageTicket = wonOpps.length > 0 ? closedValue / wonOpps.length : 0;
   const conversionRate = opportunities.length > 0 ? (wonOpps.length / opportunities.length) * 100 : 0;
 
   const pipelineData = stages.map((stage, index) => {

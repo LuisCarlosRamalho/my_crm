@@ -40,6 +40,7 @@ const Dashboard: React.FC = () => {
   }
 
   const totalValue = opportunities.reduce((acc, curr) => acc + curr.estimatedValue, 0);
+  const averageTicket = opportunities.length > 0 ? totalValue / opportunities.length : 0;
   const lastStage = stages.length > 0 ? stages[stages.length - 1] : 'Fechamento';
   const wonOpps = opportunities.filter(o => o.status === lastStage && !o.isLost);
   const lostOpps = opportunities.filter(o => o.isLost);
@@ -135,11 +136,11 @@ const Dashboard: React.FC = () => {
 
           <div className="stat-card">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="stat-title">Empresas Ativas</h3>
-              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Users size={20} /></div>
+              <h3 className="stat-title">Ticket Médio</h3>
+              <div className="p-2 bg-cyan-100 text-cyan-600 rounded-lg"><TrendingUp size={20} /></div>
             </div>
-            <div className="stat-value">{companies.length}</div>
-            <div className="text-xs text-muted mt-2">Contas em gestão</div>
+            <div className="stat-value" style={{ color: '#0891B2' }}>{formatCurrency(averageTicket)}</div>
+            <div className="text-xs text-muted mt-2">Média por oportunidade</div>
           </div>
 
           <div className="stat-card">
@@ -149,6 +150,15 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="stat-value">{conversionRate.toFixed(1)}%</div>
             <div className="text-xs text-muted mt-2">Oportunidades ganhas</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="stat-title">Empresas Ativas</h3>
+              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><Users size={20} /></div>
+            </div>
+            <div className="stat-value">{companies.length}</div>
+            <div className="text-xs text-muted mt-2">Contas em gestão</div>
           </div>
         </div>
 

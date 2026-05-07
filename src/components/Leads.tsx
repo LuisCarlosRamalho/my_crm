@@ -140,6 +140,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
       case 'Visita': return { bg: '#FEFCE8', border: '#FEF08A', text: '#854D0E' };
       case 'Reunião': return { bg: '#FFF7ED', border: '#FED7AA', text: '#9A3412' };
       case 'Vídeochamada': return { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B' };
+      case 'Acompanhamento Interno': return { bg: '#ECFEFF', border: '#CFFAFE', text: '#155E75' };
       default: return { bg: '#F9FAFB', border: '#E5E7EB', text: '#374151' };
     }
   };
@@ -292,6 +293,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
                       <option value="Visita">Visita</option>
                       <option value="Reunião">Reunião</option>
                       <option value="Vídeochamada">Vídeochamada</option>
+                      <option value="Acompanhamento Interno">Acompanhamento Interno</option>
                     </select>
                   </div>
                   <div className="form-group flex-1">
@@ -355,6 +357,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
                               <option value="Visita">Visita</option>
                               <option value="Reunião">Reunião</option>
                               <option value="Vídeochamada">Vídeochamada</option>
+                              <option value="Acompanhamento Interno">Acompanhamento Interno</option>
                             </select>
                             <input type="datetime-local" value={activity.date} onChange={e => updateActivity(activity.id, 'date', e.target.value)} style={{ flex: 1, padding: '0.25rem', fontSize: '0.875rem', borderRadius: '0.25rem', border: `1px solid ${colors.border}`, backgroundColor: 'rgba(255,255,255,0.7)', outline: 'none' }} />
                           </div>

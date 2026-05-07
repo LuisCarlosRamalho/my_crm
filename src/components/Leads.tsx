@@ -287,13 +287,13 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToPipeline }) => {
                   <div className="form-group flex-1">
                     <label className="form-label">Canal</label>
                     <select value={newActivity.type} onChange={e => setNewActivity({ ...newActivity, type: e.target.value as ActivityType })}>
+                      <option value="Acompanhamento Interno">Acompanhamento Interno</option>
                       <option value="Telefone">Telefone</option>
                       <option value="WhatsApp">WhatsApp</option>
                       <option value="E-mail">E-mail</option>
                       <option value="Visita">Visita</option>
                       <option value="Reunião">Reunião</option>
                       <option value="Vídeochamada">Vídeochamada</option>
-                      <option value="Acompanhamento Interno">Acompanhamento Interno</option>
                     </select>
                   </div>
                   <div className="form-group flex-1">
